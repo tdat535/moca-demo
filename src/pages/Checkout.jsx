@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import usePageTitle from '../hooks/usePageTitle';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { formatPrice } from '../data/products';
@@ -41,6 +42,7 @@ export default function Checkout() {
   const { cart, dispatch, totalItems, totalPrice } = useCart();
   const { user, profile } = useAuth();
   const navigate = useNavigate();
+  usePageTitle('Đặt hàng');
 
   const [form, setForm] = useState({
     name: profile?.full_name || '',

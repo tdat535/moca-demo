@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /tai-khoan
+
+Sitemap: https://noithatmoca.com/sitemap.xml

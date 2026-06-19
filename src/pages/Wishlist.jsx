@@ -1,10 +1,12 @@
 import { Link } from 'react-router-dom';
 import { useWishlist } from '../context/WishlistContext';
+import usePageTitle from '../hooks/usePageTitle';
 import { useAdmin } from '../context/AdminContext';
 import ProductCard from '../components/ProductCard';
 import { HeartIcon } from '@heroicons/react/24/outline';
 
 export default function Wishlist() {
+  usePageTitle('Yêu thích');
   const { wishlist } = useWishlist();
   const { productList } = useAdmin();
 

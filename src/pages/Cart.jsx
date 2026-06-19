@@ -1,5 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
+import usePageTitle from '../hooks/usePageTitle';
 import { formatPrice } from '../data/products';
 import { ShieldCheckIcon, ArrowPathIcon, PhoneIcon, XMarkIcon, MinusIcon, PlusIcon, ShoppingCartIcon } from '@heroicons/react/24/outline';
 
@@ -12,6 +13,7 @@ const trustBadges = [
 export default function Cart() {
   const { cart, dispatch, totalItems, totalPrice } = useCart();
   const navigate = useNavigate();
+  usePageTitle('Giỏ hàng');
 
   if (cart.length === 0) {
     return (

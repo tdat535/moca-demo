@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import usePageTitle from '../hooks/usePageTitle';
 
 const articles = [
   {
@@ -38,6 +39,7 @@ const tagColors = {
 };
 
 export default function News() {
+  usePageTitle('Tin tức');
   return (
     <div style={{ background: '#f1f5f9', minHeight: '100vh' }}>
       <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 16px' }}>

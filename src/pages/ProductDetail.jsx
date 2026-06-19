@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAdmin } from '../context/AdminContext';
+import usePageTitle from '../hooks/usePageTitle';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { useWishlist } from '../context/WishlistContext';
@@ -33,6 +34,7 @@ export default function ProductDetail() {
   const [reviewSuccess, setReviewSuccess] = useState(false);
 
   const product = productList.find(p => p.slug === slug);
+  usePageTitle(product?.name);
 
   useEffect(() => { if (product) addViewed(product.slug); }, [product?.slug]);
 

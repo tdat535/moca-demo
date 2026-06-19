@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { formatPrice } from '../data/products';
+import usePageTitle from '../hooks/usePageTitle';
 import { CheckIcon, ChevronDownIcon } from '@heroicons/react/24/outline';
 
 const ORDER_STATUS = {
@@ -16,6 +17,7 @@ const ORDER_STATUS = {
 export default function Profile() {
   const { user, profile, logout, updateProfile } = useAuth();
   const navigate = useNavigate();
+  usePageTitle('Tài khoản');
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
     full_name: profile?.full_name || '',

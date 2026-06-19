@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { useAdmin } from '../context/AdminContext';
+import usePageTitle from '../hooks/usePageTitle';
 import { categories as staticCats, formatPrice } from '../data/products';
 import ProductCard from '../components/ProductCard';
 import { ProductCardSkeleton } from '../components/Skeleton';
@@ -81,6 +82,7 @@ export default function Home() {
   const saleFilter = searchParams.get('sale');
   const categories = dbCats?.length ? dbCats : staticCats;
   const activeCat = categories.find(c => c.slug === selectedCategory);
+  usePageTitle(searchQuery ? `Tìm: ${searchQuery}` : saleFilter ? 'Khuyến mãi' : activeCat ? activeCat.name : null);
 
   const filtered = useMemo(() => {
     let list = [...productList];
