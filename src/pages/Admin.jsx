@@ -120,7 +120,7 @@ export default function Admin() {
     addCategory, updateCategory, deleteCategory,
     addCoupon, updateCoupon, deleteCoupon,
     deleteReview,
-    addBanner, deleteBanner,
+    addBanner, deleteBanner, reorderBanners,
     updateOrder, updateSettings,
     fetchAdminData,
   } = useAdmin();
@@ -156,6 +156,10 @@ export default function Admin() {
   // Orders
   const [orderFilter, setOrderFilter] = useState('all');
   const [expandedOrder, setExpandedOrder] = useState(null);
+
+  // Banner drag
+  const [dragBanner, setDragBanner] = useState(null);
+  const [dragOverBanner, setDragOverBanner] = useState(null);
 
   // Settings form
   const [settingsForm, setSettingsForm] = useState({ ...settings });
@@ -1047,6 +1051,12 @@ export default function Admin() {
                 </div>
               </div>
 
+              {banners.length > 1 && (
+                <div style={{ background: C.primaryBg, border: `1px solid ${C.primary}20`, borderRadius: 8, padding: '8px 14px', marginBottom: 14, fontSize: 12, color: C.primary, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 15 }}>💡</span> Kéo thả để thay đổi vị trí banner
+                </div>
+              )}
+
               {banners.length === 0 ? (
                 <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '50px 20px', textAlign: 'center' }}>
                   <div style={{ fontSize: 48, marginBottom: 12 }}>🖼️</div>
@@ -1056,10 +1066,36 @@ export default function Admin() {
               ) : (
                 <div style={{ display: 'grid', gap: 14 }}>
                   {banners.map((b, i) => (
-                    <div key={b.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
-                      <img src={b.image_url} alt={`Banner ${i + 1}`} style={{ width: '100%', height: 'auto', aspectRatio: '1400/450', objectFit: 'cover', display: 'block' }} />
+                    <div key={b.id} draggable
+                      onDragStart={() => setDragBanner(i)}
+                      onDragEnd={() => { setDragBanner(null); setDragOverBanner(null); }}
+                      onDragOver={(e) => { e.preventDefault(); setDragOverBanner(i); }}
+                      onDragLeave={() => setDragOverBanner(null)}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        if (dragBanner === null || dragBanner === i) return;
+                        const reordered = [...banners];
+                        const [moved] = reordered.splice(dragBanner, 1);
+                        reordered.splice(i, 0, moved);
+                        reorderBanners(reordered);
+                        setDragBanner(null);
+                        setDragOverBanner(null);
+                        showToast('Đã cập nhật vị trí banner!');
+                      }}
+                      style={{
+                        background: C.card,
+                        border: dragOverBanner === i ? `2px dashed ${C.primary}` : `1px solid ${C.border}`,
+                        borderRadius: 12, overflow: 'hidden', cursor: 'grab',
+                        opacity: dragBanner === i ? 0.5 : 1,
+                        transition: 'opacity .15s, border .15s, transform .15s',
+                        transform: dragOverBanner === i ? 'scale(1.01)' : 'scale(1)',
+                      }}>
+                      <img src={b.image_url} alt={`Banner ${i + 1}`} style={{ width: '100%', height: 'auto', aspectRatio: '1400/450', objectFit: 'cover', display: 'block', pointerEvents: 'none' }} />
                       <div style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <span style={{ fontSize: 13, color: C.muted, fontWeight: 500 }}>Banner {i + 1}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <span style={{ fontSize: 16, color: C.light, cursor: 'grab', userSelect: 'none' }}>⠿</span>
+                          <span style={{ fontSize: 13, color: C.muted, fontWeight: 500 }}>Banner {i + 1}</span>
+                        </div>
                         <button onClick={() => setDelConfirm({ type: 'banner', id: b.id })}
                           style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 6, border: '1px solid #fecdd3', background: 'transparent', color: '#e11d48', cursor: 'pointer', transition: 'background .15s' }}
                           onMouseEnter={e => e.currentTarget.style.background = '#fff1f2'}

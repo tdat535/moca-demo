@@ -178,6 +178,14 @@ export function AdminProvider({ children }) {
     return { error };
   };
 
+  const reorderBanners = async (reordered) => {
+    setBanners(reordered);
+    const updates = reordered.map((b, i) =>
+      supabase.from('banners').update({ sort_order: i }).eq('id', b.id)
+    );
+    await Promise.all(updates);
+  };
+
   const normalized = useMemo(() => productList.map(p => ({
     ...p,
     categoryId: p.category_id,
@@ -193,7 +201,7 @@ export function AdminProvider({ children }) {
       addCategory, updateCategory, deleteCategory,
       addCoupon, updateCoupon, deleteCoupon,
       addReview, deleteReview,
-      addBanner, deleteBanner,
+      addBanner, deleteBanner, reorderBanners,
       updateOrder, updateSettings,
       fetchAdminData,
       refetch: fetchPublic,
