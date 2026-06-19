@@ -3,6 +3,13 @@ import { supabase } from '../lib/supabase';
 
 const AdminContext = createContext(null);
 
+const DEFAULT_SETTINGS = {
+  store_name: 'MOCA Living',
+  phone1: '', phone2: '', address: '', working_hours: 'T2 – CN: 8h00 – 21h00',
+  zalo_phone: '', facebook_url: '', tiktok_url: '',
+  bank_id: '', bank_account_no: '', bank_account_name: '',
+};
+
 export function AdminProvider({ children }) {
   const [productList, setProductList] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -10,6 +17,7 @@ export function AdminProvider({ children }) {
   const [reviews, setReviews] = useState([]);
   const [banners, setBanners] = useState([]);
   const [orders, setOrders] = useState([]);
+  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
   const [adminLoaded, setAdminLoaded] = useState(false);
 
@@ -22,16 +30,19 @@ export function AdminProvider({ children }) {
       { data: cats },
       { data: bannerData },
       { data: reviewData },
+      { data: settingsData },
     ] = await Promise.all([
       supabase.from('products').select('*').order('created_at', { ascending: false }),
       supabase.from('categories').select('*').order('id'),
       supabase.from('banners').select('*').order('sort_order'),
       supabase.from('reviews').select('*, products(name, images)').order('created_at', { ascending: false }),
+      supabase.from('settings').select('*').eq('id', 1).maybeSingle(),
     ]);
     setProductList(prods || []);
     setCategories(cats || []);
     setBanners(bannerData || []);
     setReviews(reviewData || []);
+    if (settingsData) setSettings(settingsData);
     setLoading(false);
   };
 
@@ -48,6 +59,13 @@ export function AdminProvider({ children }) {
     setOrders(orderData || []);
     setAdminLoaded(true);
   }, [adminLoaded]);
+
+  // ── Settings ──
+  const updateSettings = async (data) => {
+    const { error } = await supabase.from('settings').update(data).eq('id', 1);
+    if (!error) setSettings(prev => ({ ...prev, ...data }));
+    return { error };
+  };
 
   // ── Products ──
   const addProduct = async (data) => {
@@ -170,13 +188,13 @@ export function AdminProvider({ children }) {
 
   return (
     <AdminContext.Provider value={{
-      productList: normalized, categories, coupons, reviews, banners, orders, loading,
+      productList: normalized, categories, coupons, reviews, banners, orders, settings, loading,
       addProduct, updateProduct, deleteProduct,
       addCategory, updateCategory, deleteCategory,
       addCoupon, updateCoupon, deleteCoupon,
       addReview, deleteReview,
       addBanner, deleteBanner,
-      updateOrder,
+      updateOrder, updateSettings,
       fetchAdminData,
       refetch: fetchPublic,
     }}>

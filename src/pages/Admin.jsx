@@ -18,6 +18,7 @@ const SIDEBAR = [
   { id: 'categories', label: 'Danh mục', icon: '🏷️' },
   { id: 'coupons', label: 'Mã giảm giá', icon: '🎟️' },
   { id: 'reviews', label: 'Đánh giá', icon: '⭐' },
+  { id: 'settings', label: 'Cài đặt', icon: '⚙️' },
 ];
 
 const ORDER_STATUS = {
@@ -112,17 +113,18 @@ function SectionTitle({ children }) {
 // ── Main component ──
 export default function Admin() {
   const {
-    productList, categories, coupons, reviews, banners, orders, loading,
+    productList, categories, coupons, reviews, banners, orders, settings, loading,
     addProduct, updateProduct, deleteProduct,
     addCategory, updateCategory, deleteCategory,
     addCoupon, updateCoupon, deleteCoupon,
     deleteReview,
     addBanner, deleteBanner,
-    updateOrder,
+    updateOrder, updateSettings,
     fetchAdminData,
   } = useAdmin();
 
   useEffect(() => { fetchAdminData(); }, [fetchAdminData]);
+  useEffect(() => { setSettingsForm({ ...settings }); }, [settings]);
 
   const [uploading, setUploading] = useState(false);
   const productFileRef = useRef(null);
@@ -150,6 +152,9 @@ export default function Admin() {
   // Orders
   const [orderFilter, setOrderFilter] = useState('all');
   const [expandedOrder, setExpandedOrder] = useState(null);
+
+  // Settings form
+  const [settingsForm, setSettingsForm] = useState({ ...settings });
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
 
@@ -1073,6 +1078,81 @@ export default function Admin() {
               </div>
             </div>
           )}
+
+          {/* ═══════════ SETTINGS ═══════════ */}
+          {tab === 'settings' && (() => {
+            const [sf, setSf] = [settingsForm, setSettingsForm];
+            return (
+            <div>
+              <SectionTitle>Cài đặt cửa hàng</SectionTitle>
+
+              <div style={{ display: 'grid', gap: 18 }}>
+                {/* Thông tin cửa hàng */}
+                <div style={{ ...tableCard, padding: 24 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ width: 3, height: 16, background: C.primary, borderRadius: 2, display: 'inline-block' }} />
+                    Thông tin cửa hàng
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                    <div style={{ gridColumn: '1/-1' }}>
+                      <FInput label="Tên cửa hàng" value={sf.store_name} onChange={e => setSf(f => ({ ...f, store_name: e.target.value }))} />
+                    </div>
+                    <FInput label="Số điện thoại 1" value={sf.phone1} onChange={e => setSf(f => ({ ...f, phone1: e.target.value }))} placeholder="0398 945 409" />
+                    <FInput label="Số điện thoại 2" value={sf.phone2} onChange={e => setSf(f => ({ ...f, phone2: e.target.value }))} placeholder="0867 968 963" />
+                    <div style={{ gridColumn: '1/-1' }}>
+                      <FInput label="Địa chỉ" value={sf.address} onChange={e => setSf(f => ({ ...f, address: e.target.value }))} placeholder="158 Nguyễn Ảnh Thủ..." />
+                    </div>
+                    <FInput label="Giờ làm việc" value={sf.working_hours} onChange={e => setSf(f => ({ ...f, working_hours: e.target.value }))} placeholder="T2 – CN: 8h00 – 21h00" />
+                  </div>
+                </div>
+
+                {/* Mạng xã hội */}
+                <div style={{ ...tableCard, padding: 24 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ width: 3, height: 16, background: C.primary, borderRadius: 2, display: 'inline-block' }} />
+                    Mạng xã hội
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                    <FInput label="SĐT Zalo" value={sf.zalo_phone} onChange={e => setSf(f => ({ ...f, zalo_phone: e.target.value }))} placeholder="0398945409" />
+                    <FInput label="Link Facebook" value={sf.facebook_url} onChange={e => setSf(f => ({ ...f, facebook_url: e.target.value }))} placeholder="https://facebook.com/..." />
+                    <FInput label="Link TikTok" value={sf.tiktok_url} onChange={e => setSf(f => ({ ...f, tiktok_url: e.target.value }))} placeholder="https://tiktok.com/@..." />
+                  </div>
+                </div>
+
+                {/* Ngân hàng */}
+                <div style={{ ...tableCard, padding: 24 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ width: 3, height: 16, background: C.primary, borderRadius: 2, display: 'inline-block' }} />
+                    Thông tin ngân hàng (QR thanh toán)
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
+                    <FInput label="Mã ngân hàng" value={sf.bank_id} onChange={e => setSf(f => ({ ...f, bank_id: e.target.value }))} placeholder="BIDV, VCB, TCB, MB..." />
+                    <FInput label="Số tài khoản" value={sf.bank_account_no} onChange={e => setSf(f => ({ ...f, bank_account_no: e.target.value }))} placeholder="0123456789" />
+                    <FInput label="Chủ tài khoản" value={sf.bank_account_name} onChange={e => setSf(f => ({ ...f, bank_account_name: e.target.value }))} placeholder="NGUYEN VAN A" />
+                  </div>
+                  {sf.bank_id && sf.bank_account_no && (
+                    <div style={{ marginTop: 16, padding: 16, background: C.bg, borderRadius: 10, textAlign: 'center' }}>
+                      <div style={{ fontSize: 11, color: C.light, marginBottom: 8, fontWeight: 600 }}>Xem trước mã QR</div>
+                      <img
+                        src={`https://img.vietqr.io/image/${sf.bank_id}-${sf.bank_account_no}-compact2.png?amount=100000&addInfo=DEMO&accountName=${encodeURIComponent(sf.bank_account_name || '')}`}
+                        alt="QR preview" style={{ height: 160, borderRadius: 8 }}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <Btn onClick={async () => {
+                    const { error } = await updateSettings(sf);
+                    if (error) alert('Lỗi: ' + error.message);
+                    else showToast('Đã lưu cài đặt!');
+                  }} style={{ padding: '12px 28px' }}>💾 Lưu cài đặt</Btn>
+                  <Btn variant="ghost" onClick={() => setSf({ ...settings })} style={{ padding: '12px 20px' }}>Hoàn tác</Btn>
+                </div>
+              </div>
+            </div>
+            );
+          })()}
 
         </div>
       </div>

@@ -3,15 +3,9 @@ import { Link, useNavigate } from 'react-router-dom';
 import usePageTitle from '../hooks/usePageTitle';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
+import { useAdmin } from '../context/AdminContext';
 import { formatPrice } from '../data/products';
 import { supabase } from '../lib/supabase';
-
-// ── Thông tin ngân hàng (thay bằng thông tin thật) ──
-const BANK_INFO = {
-  bankId: 'BIDV',
-  accountNo: '0123456789',
-  accountName: 'NGUYEN VAN A',
-};
 
 const STATUS_LABELS = { pending: 'Chờ xác nhận', confirmed: 'Đã xác nhận', shipping: 'Đang giao', delivered: 'Đã giao', cancelled: 'Đã hủy' };
 
@@ -41,8 +35,17 @@ function StepBar({ step }) {
 export default function Checkout() {
   const { cart, dispatch, totalItems, totalPrice } = useCart();
   const { user, profile } = useAuth();
+  const { settings } = useAdmin();
   const navigate = useNavigate();
   usePageTitle('Đặt hàng');
+
+  const BANK_INFO = {
+    bankId: settings.bank_id || '',
+    accountNo: settings.bank_account_no || '',
+    accountName: settings.bank_account_name || '',
+  };
+  const supportPhone = settings.phone1 || '0398.945.409';
+  const zaloPhone = settings.zalo_phone || settings.phone1 || '0398945409';
 
   const [form, setForm] = useState({
     name: profile?.full_name || '',
@@ -153,7 +156,7 @@ export default function Checkout() {
 
               <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 16, lineHeight: 1.6 }}>
                 Sau khi chuyển khoản, chúng tôi sẽ xác nhận đơn hàng trong vòng 5–15 phút.
-                <br />Nếu cần hỗ trợ, liên hệ Zalo: <strong>0934.638.622</strong>
+                <br />Nếu cần hỗ trợ, liên hệ Zalo: <strong>{supportPhone}</strong>
               </p>
 
               <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'center' }}>
@@ -161,7 +164,7 @@ export default function Checkout() {
                   background: '#2563eb', color: '#fff', border: 'none', borderRadius: 10,
                   padding: '12px 24px', fontSize: 14, fontWeight: 700, cursor: 'pointer',
                 }}>Tôi đã chuyển khoản</button>
-                <a href="https://zalo.me/0934638622" target="_blank" rel="noopener noreferrer" style={{
+                <a href={`https://zalo.me/${zaloPhone.replace(/\D/g,'')}`} target="_blank" rel="noopener noreferrer" style={{
                   border: '1.5px solid #e2e8f0', color: '#0068ff', textDecoration: 'none',
                   borderRadius: 10, padding: '12px 20px', fontSize: 14, fontWeight: 700,
                 }}>Chat Zalo</a>

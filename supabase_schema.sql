@@ -280,7 +280,39 @@ create policy "Users manage own cart"
   with check (auth.uid() = user_id);
 
 
--- ── 9. WISHLISTS (yêu thích theo tài khoản) ──
+-- ── 9. SETTINGS (cài đặt cửa hàng) ──
+create table if not exists settings (
+  id int primary key default 1 check (id = 1),
+  store_name text not null default 'MOCA Living',
+  phone1 text not null default '',
+  phone2 text not null default '',
+  address text not null default '',
+  working_hours text not null default 'T2 – CN: 8h00 – 21h00',
+  zalo_phone text not null default '',
+  facebook_url text not null default '',
+  tiktok_url text not null default '',
+  bank_id text not null default '',
+  bank_account_no text not null default '',
+  bank_account_name text not null default '',
+  updated_at timestamptz not null default now()
+);
+
+-- Chèn row mặc định
+insert into settings (id) values (1) on conflict (id) do nothing;
+
+alter table settings enable row level security;
+
+drop policy if exists "Settings public read" on settings;
+create policy "Settings public read"
+  on settings for select using (true);
+
+drop policy if exists "Admin update settings" on settings;
+create policy "Admin update settings"
+  on settings for update
+  using (exists (select 1 from profiles where id = auth.uid() and role = 'admin'));
+
+
+-- ── 10. WISHLISTS (yêu thích theo tài khoản) ──
 create table if not exists wishlists (
   id bigint generated always as identity primary key,
   user_id uuid not null references auth.users(id) on delete cascade,

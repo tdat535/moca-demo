@@ -46,22 +46,26 @@ export default function About() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
             <div>
               <div style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 8 }}>Địa chỉ</div>
-              <p style={{ fontSize: 14, color: '#374151', lineHeight: 1.6 }}>123 Đường Nguyễn Huệ,<br />Quận 1, TP. Hồ Chí Minh</p>
+              <p style={{ fontSize: 14, color: '#374151', lineHeight: 1.6 }}>158 Nguyễn Ảnh Thủ,<br />Thới Tam Thôn, Hóc Môn</p>
             </div>
             <div>
               <div style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 8 }}>Hotline</div>
-              <a href="tel:0934638622" style={{ fontSize: 20, fontWeight: 800, color: '#2563eb', textDecoration: 'none' }}>0934.638.622</a>
-              <p style={{ fontSize: 13, color: '#94a3b8', marginTop: 4 }}>T2 – CN: 8h00 – 21h00</p>
+              <a href="tel:0398945409" style={{ fontSize: 20, fontWeight: 800, color: '#2563eb', textDecoration: 'none' }}>0398.945.409</a>
+              <p style={{ fontSize: 13, color: '#94a3b8', marginTop: 4 }}>0867.968.963</p>
+              <p style={{ fontSize: 13, color: '#94a3b8', marginTop: 2 }}>T2 – CN: 8h00 – 21h00</p>
             </div>
             <div>
               <div style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 8 }}>Mạng xã hội</div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <a href="https://zalo.me/0934638622" target="_blank" rel="noopener noreferrer"
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <a href="https://zalo.me/0398945409" target="_blank" rel="noopener noreferrer"
                   style={{ background: '#0068ff', color: '#fff', padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>
                   Zalo
                 </a>
-                <a href="#" style={{ background: '#1877f2', color: '#fff', padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>
+                <a href="https://www.facebook.com/share/1CG1KUriyG/?mibextid=wwXIfr" target="_blank" rel="noopener noreferrer" style={{ background: '#1877f2', color: '#fff', padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>
                   Facebook
+                </a>
+                <a href="https://www.tiktok.com/@mocaliving" target="_blank" rel="noopener noreferrer" style={{ background: '#010101', color: '#fff', padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>
+                  TikTok
                 </a>
               </div>
             </div>

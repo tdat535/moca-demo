@@ -1,17 +1,18 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
+import { useAdmin } from '../context/AdminContext';
 import usePageTitle from '../hooks/usePageTitle';
 import { formatPrice } from '../data/products';
 import { ShieldCheckIcon, ArrowPathIcon, PhoneIcon, XMarkIcon, MinusIcon, PlusIcon, ShoppingCartIcon } from '@heroicons/react/24/outline';
 
-const trustBadges = [
+const trustBadgesDef = [
   { Icon: ShieldCheckIcon, text: 'Thanh toán bảo mật 100%' },
   { Icon: ArrowPathIcon, text: 'Đổi trả miễn phí 30 ngày' },
-  { Icon: PhoneIcon, text: '0934.638.622 hỗ trợ 24/7' },
 ];
 
 export default function Cart() {
   const { cart, dispatch, totalItems, totalPrice } = useCart();
+  const { settings } = useAdmin();
   const navigate = useNavigate();
   usePageTitle('Giỏ hàng');
 
@@ -148,7 +149,7 @@ export default function Cart() {
 
             {/* Trust badges */}
             <div className="mt-4 flex flex-col gap-2">
-              {trustBadges.map(({ Icon, text }) => (
+              {[...trustBadgesDef, { Icon: PhoneIcon, text: `${settings.phone1 || '0398.945.409'} hỗ trợ 24/7` }].map(({ Icon, text }) => (
                 <div key={text} className="flex items-center gap-2 text-xs text-slate-500">
                   <Icon className="w-4 h-4 text-blue-600 shrink-0" />
                   {text}
