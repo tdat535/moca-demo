@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { useAdmin } from '../context/AdminContext';
 import { formatPrice } from '../data/products';
 import { uploadImage } from '../lib/uploadImage';
+import { supabase } from '../lib/supabase';
+import * as XLSX from 'xlsx';
 
 const C = {
   primary: '#2563eb', primaryBg: '#eff6ff', primaryHover: '#1d4ed8',
@@ -127,8 +129,10 @@ export default function Admin() {
   useEffect(() => { setSettingsForm({ ...settings }); }, [settings]);
 
   const [uploading, setUploading] = useState(false);
+  const [csvImporting, setCsvImporting] = useState(false);
   const productFileRef = useRef(null);
   const bannerFileRef = useRef(null);
+  const csvFileRef = useRef(null);
 
   const [tab, setTab] = useState('dashboard');
   const [toast, setToast] = useState('');
@@ -244,6 +248,54 @@ export default function Admin() {
   };
 
   const filteredProducts = productList.filter(p => p.name.toLowerCase().includes(productSearch.toLowerCase()));
+
+  const downloadExcelTemplate = () => {
+    const data = [
+      { 'Tên sản phẩm': 'Sofa MOCA Helsinki', 'Giá bán': 18990000, 'Giá gốc': 22990000, 'Danh mục': 'Sofa & Ghế', 'Mô tả': 'Sofa góc thiết kế Bắc Âu', 'Chất liệu': 'Vải bouclé', 'Thương hiệu': 'MOCA Living', 'Màu sắc': 'Be kem', 'Kích thước': '280x180x85cm', 'Mới': 'x', 'Sale': 'x', 'Tồn kho': 10 },
+    ];
+    const ws = XLSX.utils.json_to_sheet(data);
+    ws['!cols'] = [{ wch: 30 }, { wch: 12 }, { wch: 12 }, { wch: 15 }, { wch: 35 }, { wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 18 }, { wch: 5 }, { wch: 5 }, { wch: 8 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Sản phẩm');
+    XLSX.writeFile(wb, 'mau-san-pham.xlsx');
+  };
+
+  const handleExcelImport = async (e) => {
+    const file = e.target.files[0]; if (!file) return;
+    setCsvImporting(true);
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf);
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+    let added = 0;
+    for (const row of rows) {
+      const name = row['Tên sản phẩm'] || row['name'] || '';
+      if (!name) continue;
+      const catName = row['Danh mục'] || row['category'] || '';
+      const catMatch = categories.find(c => c.name.toLowerCase() === catName.toLowerCase());
+      const slug = name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[đĐ]/g, 'd').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+      const product = {
+        name, slug, category_id: catMatch?.id || null,
+        price: parseInt(row['Giá bán'] || row['price']) || 0,
+        original_price: parseInt(row['Giá gốc'] || row['original_price']) || 0,
+        images: ['https://placehold.co/600x600/f1f5f9/94a3b8?text=Ch%C6%B0a+c%C3%B3+%E1%BA%A3nh'],
+        description: row['Mô tả'] || row['description'] || '',
+        material: row['Chất liệu'] || row['material'] || '',
+        brand: row['Thương hiệu'] || row['brand'] || '',
+        color: row['Màu sắc'] || row['color'] || '',
+        dimensions: row['Kích thước'] || row['dimensions'] || '',
+        is_new: !!(row['Mới'] || row['is_new']),
+        is_sale: !!(row['Sale'] || row['is_sale']),
+        stock: parseInt(row['Tồn kho'] || row['stock']) || 0,
+        rating: 0, reviews: 0, sold: 0, specs: {}, content: [],
+      };
+      const { error } = await supabase.from('products').insert([product]);
+      if (!error) added++;
+    }
+    setCsvImporting(false);
+    e.target.value = '';
+    showToast(`Đã import ${added}/${rows.length} sản phẩm!`);
+    if (added > 0) window.location.reload();
+  };
 
   // ── Shared table/card styles ──
   const tableCard = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' };
@@ -506,9 +558,16 @@ export default function Admin() {
                     onFocus={e => e.target.style.borderColor = C.primary}
                     onBlur={e => e.target.style.borderColor = C.border} />
                 </div>
-                <Btn onClick={() => { setEditProductId(null); setProductForm(EMPTY_PRODUCT); setTab('product-form'); }}>
-                  + Thêm sản phẩm
-                </Btn>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <Btn variant="ghost" onClick={downloadExcelTemplate}>📄 Tải mẫu Excel</Btn>
+                  <input ref={csvFileRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={handleExcelImport} />
+                  <Btn variant="soft" disabled={csvImporting} onClick={() => csvFileRef.current.click()}>
+                    {csvImporting ? '⏳ Đang import...' : '📥 Import Excel'}
+                  </Btn>
+                  <Btn onClick={() => { setEditProductId(null); setProductForm(EMPTY_PRODUCT); setTab('product-form'); }}>
+                    + Thêm sản phẩm
+                  </Btn>
+                </div>
               </div>
 
               <div style={tableCard}>
