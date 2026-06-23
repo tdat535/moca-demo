@@ -4,6 +4,7 @@ import usePageTitle from '../hooks/usePageTitle';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { useAdmin } from '../context/AdminContext';
+import { useToast } from '../context/ToastContext';
 import { formatPrice } from '../data/products';
 import { supabase } from '../lib/supabase';
 
@@ -36,6 +37,7 @@ export default function Checkout() {
   const { cart, dispatch, totalItems, totalPrice } = useCart();
   const { user, profile } = useAuth();
   const { settings } = useAdmin();
+  const { showToast } = useToast();
   const navigate = useNavigate();
   usePageTitle('Đặt hàng');
 
@@ -59,9 +61,10 @@ export default function Checkout() {
 
   // Coupon
   const [couponCode, setCouponCode] = useState('');
-  const [appliedCoupon, setAppliedCoupon] = useState(null); // { code, discount_percent }
+  const [appliedCoupon, setAppliedCoupon] = useState(null);
   const [couponError, setCouponError] = useState('');
   const [couponLoading, setCouponLoading] = useState(false);
+  const [confirming, setConfirming] = useState(false);
 
   const discountAmount = appliedCoupon ? Math.round(totalPrice * appliedCoupon.discount_percent / 100) : 0;
   const finalPrice = totalPrice - discountAmount;
@@ -76,7 +79,12 @@ export default function Checkout() {
     if (error || !data) { setCouponError('Mã giảm giá không hợp lệ'); return; }
     if (data.expires_at && new Date(data.expires_at) < new Date()) { setCouponError('Mã giảm giá đã hết hạn'); return; }
     if (data.min_order && totalPrice < data.min_order) { setCouponError(`Đơn hàng tối thiểu ${formatPrice(data.min_order)}`); return; }
-    setAppliedCoupon({ code: data.code, discount_percent: data.discount_percent });
+    if (data.max_uses && data.used_count >= data.max_uses) { setCouponError('Mã giảm giá đã hết lượt sử dụng'); return; }
+    if (data.max_uses_per_user && user) {
+      const { count } = await supabase.from('coupon_usage').select('*', { count: 'exact', head: true }).eq('coupon_id', data.id).eq('user_id', user.id);
+      if (count >= data.max_uses_per_user) { setCouponError('Bạn đã sử dụng mã này rồi'); return; }
+    }
+    setAppliedCoupon({ ...data });
     setCouponCode('');
   };
 
@@ -106,9 +114,30 @@ export default function Checkout() {
     const { data, error } = await supabase.from('orders').insert([orderData]).select().single();
     setSubmitting(false);
 
-    if (error) { alert('Đặt hàng thất bại: ' + error.message); return; }
+    if (error) { showToast('Đặt hàng thất bại: ' + error.message, 'error'); return; }
 
-    setOrderResult({ id: data?.id, payment: form.payment, total: finalPrice });
+    const orderId = data.id;
+
+    if (appliedCoupon) {
+      await supabase.from('coupon_usage').insert({
+        coupon_id: appliedCoupon.id,
+        order_id: orderId,
+        user_id: user?.id || null,
+        customer_name: form.name,
+        discount_amount: discountAmount,
+      });
+    }
+
+    if (form.payment === 'bank') {
+      await supabase.from('payment_transactions').insert({
+        order_id: orderId,
+        payment_method: 'bank',
+        amount: finalPrice,
+        status: 'pending',
+      });
+    }
+
+    setOrderResult({ id: orderId, payment: form.payment, total: finalPrice });
     dispatch({ type: 'CLEAR' });
   };
 
@@ -160,10 +189,16 @@ export default function Checkout() {
               </p>
 
               <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'center' }}>
-                <button onClick={() => setOrderResult(r => ({ ...r, payment: 'done' }))} style={{
+                <button onClick={async () => {
+                  setConfirming(true);
+                  await supabase.from('payment_transactions').update({ status: 'confirmed', confirmed_at: new Date().toISOString() }).eq('order_id', orderResult.id).eq('status', 'pending');
+                  setOrderResult(r => ({ ...r, payment: 'done' }));
+                  setConfirming(false);
+                }} disabled={confirming} style={{
                   background: '#2563eb', color: '#fff', border: 'none', borderRadius: 10,
-                  padding: '12px 24px', fontSize: 14, fontWeight: 700, cursor: 'pointer',
-                }}>Tôi đã chuyển khoản</button>
+                  padding: '12px 24px', fontSize: 14, fontWeight: 700, cursor: confirming ? 'wait' : 'pointer',
+                  opacity: confirming ? .7 : 1,
+                }}>{confirming ? 'Đang xác nhận...' : 'Tôi đã chuyển khoản'}</button>
                 <a href={`https://zalo.me/${zaloPhone.replace(/\D/g,'')}`} target="_blank" rel="noopener noreferrer" style={{
                   border: '1.5px solid #e2e8f0', color: '#0068ff', textDecoration: 'none',
                   borderRadius: 10, padding: '12px 20px', fontSize: 14, fontWeight: 700,
@@ -362,7 +397,9 @@ export default function Checkout() {
               </button>
 
               <p style={{ textAlign: 'center', fontSize: 12, color: '#94a3b8', marginTop: 12, lineHeight: 1.5 }}>
-                Bằng việc đặt hàng, bạn đồng ý với chính sách mua hàng của chúng tôi.
+                Bằng việc đặt hàng, bạn đồng ý với{' '}
+                <Link to="/chinh-sach-chung" style={{ color: '#2563eb', textDecoration: 'underline' }}>chính sách mua hàng</Link>
+                {' '}của chúng tôi.
               </p>
             </div>
           </div>

@@ -18,6 +18,8 @@ export function AdminProvider({ children }) {
   const [banners, setBanners] = useState([]);
   const [orders, setOrders] = useState([]);
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+  const [payments, setPayments] = useState([]);
+  const [couponUsage, setCouponUsage] = useState([]);
   const [loading, setLoading] = useState(true);
   const [adminLoaded, setAdminLoaded] = useState(false);
 
@@ -25,24 +27,21 @@ export function AdminProvider({ children }) {
 
   const fetchPublic = async () => {
     setLoading(true);
-    const [
-      { data: prods },
-      { data: cats },
-      { data: bannerData },
-      { data: reviewData },
-      { data: settingsData },
-    ] = await Promise.all([
+    const [{ data: prods }, { data: cats }, { data: bannerData }, { data: reviewData }] = await Promise.all([
       supabase.from('products').select('*').order('created_at', { ascending: false }),
       supabase.from('categories').select('*').order('id'),
       supabase.from('banners').select('*').order('sort_order'),
       supabase.from('reviews').select('*, products(name, images)').order('created_at', { ascending: false }),
-      supabase.from('settings').select('*').eq('id', 1).maybeSingle(),
     ]);
     setProductList(prods || []);
     setCategories(cats || []);
     setBanners(bannerData || []);
     setReviews(reviewData || []);
-    if (settingsData) setSettings(settingsData);
+    const { data: settingsData } = await supabase.from('settings').select('*').eq('id', 1).maybeSingle();
+    if (settingsData) { setSettings(settingsData); } else {
+      const { data: ss } = await supabase.from('store_settings').select('*').limit(1).maybeSingle();
+      if (ss) setSettings({ store_name: ss.shop_name || 'MOCA Living', phone1: ss.phone || '', address: ss.address || '', working_hours: '', zalo_phone: '', facebook_url: '', tiktok_url: '', bank_id: '', bank_account_no: '', bank_account_name: '', phone2: '' });
+    }
     setLoading(false);
   };
 
@@ -51,12 +50,18 @@ export function AdminProvider({ children }) {
     const [
       { data: couponData },
       { data: orderData },
+      { data: paymentData },
+      { data: usageData },
     ] = await Promise.all([
       supabase.from('coupons').select('*').order('id'),
       supabase.from('orders').select('*').order('created_at', { ascending: false }),
+      supabase.from('payment_transactions').select('*').order('created_at', { ascending: false }),
+      supabase.from('coupon_usage').select('*, coupons(code)').order('used_at', { ascending: false }),
     ]);
     setCoupons(couponData || []);
     setOrders(orderData || []);
+    setPayments(paymentData || []);
+    setCouponUsage(usageData || []);
     setAdminLoaded(true);
   }, [adminLoaded]);
 
@@ -75,7 +80,7 @@ export function AdminProvider({ children }) {
         name: data.name, slug: data.slug, category_id: data.categoryId,
         price: data.price, original_price: data.originalPrice,
         images: data.images || [],
-        stock: 0, rating: 0, reviews: 0, sold: 0,
+        stock: data.stock || 0, rating: 0, reviews: 0, sold: 0,
         is_new: data.isNew || false, is_sale: data.isSale || false,
         description: data.description || '', content: data.content || [], specs: data.specs || {},
       }])
@@ -145,7 +150,7 @@ export function AdminProvider({ children }) {
   const addReview = async (data) => {
     const { data: inserted, error } = await supabase
       .from('reviews')
-      .insert([{ product_id: data.product_id, customer_name: data.customer_name, rating: data.rating, comment: data.comment }])
+      .insert([{ product_id: data.product_id, customer_name: data.customer_name, rating: data.rating, comment: data.comment, user_id: data.user_id || null }])
       .select('*, products(name, images)')
       .single();
     if (!error && inserted) setReviews(prev => [inserted, ...prev]);
@@ -196,7 +201,8 @@ export function AdminProvider({ children }) {
 
   return (
     <AdminContext.Provider value={{
-      productList: normalized, categories, coupons, reviews, banners, orders, settings, loading,
+      productList: normalized, categories, coupons, reviews, banners, orders, settings,
+      payments, couponUsage, loading,
       addProduct, updateProduct, deleteProduct,
       addCategory, updateCategory, deleteCategory,
       addCoupon, updateCoupon, deleteCoupon,

@@ -71,8 +71,28 @@
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://noithatmoca.com/san-pham/ghe-van-phong-moca-ergo</loc>
+    <loc>https://noithatmoca.com/ghe-van-phong-moca-ergo</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://noithatmoca.com/chinh-sach-chung</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://noithatmoca.com/chinh-sach-bao-mat</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://noithatmoca.com/huong-dan-mua-hang</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://noithatmoca.com/huong-dan-thanh-toan</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
 </urlset>

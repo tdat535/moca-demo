@@ -1,5 +1,5 @@
 const pulseStyle = {
-  background: 'linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%)',
+  background: 'linear-gradient(90deg, #f4f1ec 25%, #e8e3dc 50%, #f4f1ec 75%)',
   backgroundSize: '200% 100%',
   animation: 'skeletonPulse 1.5s ease-in-out infinite',
   borderRadius: 8,
@@ -7,7 +7,7 @@ const pulseStyle = {
 
 export function ProductCardSkeleton() {
   return (
-    <div style={{ background: '#fff', borderRadius: 16, overflow: 'hidden', border: '1px solid #e5e7eb' }}>
+    <div style={{ background: '#fff', borderRadius: 12, overflow: 'hidden', border: 'none', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
       {/* Image placeholder */}
       <div style={{ ...pulseStyle, aspectRatio: '1', borderRadius: 0 }} />
       {/* Info */}
@@ -19,7 +19,7 @@ export function ProductCardSkeleton() {
         {/* Price */}
         <div style={{ ...pulseStyle, height: 18, width: '45%', marginBottom: 10 }} />
         {/* Rating bar */}
-        <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: 10, display: 'flex', justifyContent: 'space-between' }}>
+        <div style={{ borderTop: '1px solid #e8e3dc', paddingTop: 10, display: 'flex', justifyContent: 'space-between' }}>
           <div style={{ ...pulseStyle, height: 12, width: '30%' }} />
           <div style={{ ...pulseStyle, height: 12, width: '25%' }} />
         </div>

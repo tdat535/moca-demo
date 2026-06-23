@@ -1,15 +1,16 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAdmin } from '../context/AdminContext';
+import { useToast } from '../context/ToastContext';
 import { formatPrice } from '../data/products';
 import { uploadImage } from '../lib/uploadImage';
 import { supabase } from '../lib/supabase';
 import * as XLSX from 'xlsx';
 
 const C = {
-  primary: '#2563eb', primaryBg: '#eff6ff', primaryHover: '#1d4ed8',
-  bg: '#f8fafc', card: '#ffffff', border: '#e2e8f0',
-  text: '#0f172a', muted: '#64748b', light: '#94a3b8',
+  primary: '#1e2d2d', primaryBg: '#edf0ee', primaryHover: '#152121',
+  bg: '#f9f7f4', card: '#ffffff', border: '#e8e3dc',
+  text: '#2d2a24', muted: '#8a847e', light: '#c4bfb8',
 };
 
 const SIDEBAR = [
@@ -19,6 +20,7 @@ const SIDEBAR = [
   { id: 'products', label: 'Sản phẩm', icon: '📦' },
   { id: 'categories', label: 'Danh mục', icon: '🏷️' },
   { id: 'coupons', label: 'Mã giảm giá', icon: '🎟️' },
+  { id: 'payments', label: 'Thanh toán', icon: '💳' },
   { id: 'reviews', label: 'Đánh giá', icon: '⭐' },
   { id: 'settings', label: 'Cài đặt', icon: '⚙️' },
 ];
@@ -34,9 +36,10 @@ const ORDER_STATUS = {
 const EMPTY_PRODUCT = {
   name: '', slug: '', categoryId: '', price: '', originalPrice: '',
   images: [], description: '', content: [], specs: [], isNew: false, isSale: false,
+  stock: '', sold: '',
 };
 const EMPTY_CAT = { name: '', slug: '', parent_id: '' };
-const EMPTY_COUPON = { code: '', discount_percent: '', min_order: '', expires_at: '', is_active: true };
+const EMPTY_COUPON = { code: '', discount_percent: '', min_order: '', expires_at: '', max_uses: '', max_uses_per_user: '1', is_active: true };
 
 // ── Reusable input components ──
 function Field({ label, children }) {
@@ -112,10 +115,57 @@ function SectionTitle({ children }) {
   </h2>;
 }
 
+function StockManager({ products, onUpdate }) {
+  const [updating, setUpdating] = useState(null);
+  const [stockValues, setStockValues] = useState({});
+  const [searchVal, setSearchVal] = useState('');
+
+  const filtered = products.filter(p =>
+    p.name.toLowerCase().includes(searchVal.toLowerCase())
+  );
+
+  return (
+    <div>
+      <input value={searchVal} onChange={e => setSearchVal(e.target.value)}
+        placeholder="Tìm sản phẩm để cập nhật tồn kho..."
+        className="w-full border-[1.5px] rounded-lg px-3 py-2 text-[13px] outline-none mb-3.5 box-border transition-colors focus:border-primary"
+        style={{ borderColor: C.border, color: C.text }}
+        onFocus={e => e.target.style.borderColor = C.primary}
+        onBlur={e => e.target.style.borderColor = C.border}
+      />
+      <div className="max-h-80 overflow-y-auto rounded-lg" style={{ border: `1px solid ${C.border}` }}>
+        {filtered.length === 0 ? (
+          <div className="py-5 text-center text-[13px]" style={{ color: C.light }}>Không tìm thấy sản phẩm</div>
+        ) : filtered.map(p => (
+          <div key={p.id} className="flex items-center gap-2.5 px-3 py-2" style={{ borderBottom: `1px solid ${C.border}50` }}>
+            <img src={p.images?.[0] || p.image} alt="" className="w-8 h-8 object-contain rounded-md shrink-0" />
+            <div className="flex-1 text-[13px] font-semibold truncate" style={{ color: C.text }}>{p.name}</div>
+            <input type="number" min="0" value={stockValues[p.id] !== undefined ? stockValues[p.id] : (p.stock || 0)}
+              onChange={e => setStockValues(s => ({ ...s, [p.id]: parseInt(e.target.value) || 0 }))}
+              className="w-[60px] border rounded-md px-2 py-1 text-[13px] text-center outline-none"
+              style={{ borderColor: C.border, color: C.text }}
+            />
+            <button disabled={updating === p.id} onClick={async () => {
+              setUpdating(p.id);
+              await onUpdate(p.id, stockValues[p.id] !== undefined ? stockValues[p.id] : (p.stock || 0), p.sold || 0);
+              setUpdating(null);
+            }}
+              className="border-none rounded-md px-3.5 py-1.5 text-xs font-semibold cursor-pointer transition-opacity disabled:opacity-60"
+              style={{ background: C.primary, color: '#fff' }}>
+              {updating === p.id ? '...' : 'Lưu'}
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Main component ──
 export default function Admin() {
   const {
-    productList, categories, coupons, reviews, banners, orders, settings, loading,
+    productList, categories, coupons, reviews, banners, orders, settings,
+    payments, couponUsage, loading,
     addProduct, updateProduct, deleteProduct,
     addCategory, updateCategory, deleteCategory,
     addCoupon, updateCoupon, deleteCoupon,
@@ -137,6 +187,8 @@ export default function Admin() {
   const [tab, setTab] = useState('dashboard');
   const [toast, setToast] = useState('');
   const [delConfirm, setDelConfirm] = useState(null); // { type, id }
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  useEffect(() => { if (window.innerWidth < 1024) setSidebarOpen(false); }, []);
 
   // Product form
   const [productForm, setProductForm] = useState(EMPTY_PRODUCT);
@@ -164,13 +216,14 @@ export default function Admin() {
   // Settings form
   const [settingsForm, setSettingsForm] = useState({ ...settings });
 
-  const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
+  const { showToast } = useToast();
 
   const totalRevenue = productList.reduce((s, p) => s + p.price * (p.sold || 0), 0);
   const totalSold = productList.reduce((s, p) => s + (p.sold || 0), 0);
 
   const goTab = (id) => {
     setTab(id);
+    setSidebarOpen(false);
     setEditProductId(null); setProductForm(EMPTY_PRODUCT);
     setEditCatId(null); setCatForm(EMPTY_CAT); setShowCatForm(false);
     setEditCouponId(null); setCouponForm(EMPTY_COUPON); setShowCouponForm(false);
@@ -201,6 +254,8 @@ export default function Admin() {
       categoryId: parseInt(productForm.categoryId),
       price: parseInt(productForm.price),
       originalPrice: parseInt(productForm.originalPrice || productForm.price),
+      stock: parseInt(productForm.stock) || 0,
+      sold: parseInt(productForm.sold) || 0,
       rating: 0,
       images: productForm.images || [],
       content: productForm.content || [],
@@ -238,6 +293,8 @@ export default function Admin() {
       ...couponForm,
       discount_percent: parseInt(couponForm.discount_percent),
       min_order: parseInt(couponForm.min_order || 0),
+      max_uses: couponForm.max_uses ? parseInt(couponForm.max_uses) : null,
+      max_uses_per_user: parseInt(couponForm.max_uses_per_user || 1),
       expires_at: couponForm.expires_at || null,
     };
     if (editCouponId) {
@@ -306,53 +363,62 @@ export default function Admin() {
   const th = { padding: '11px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '.05em', whiteSpace: 'nowrap' };
 
   if (loading) return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.bg }}>
-      <div style={{ textAlign: 'center' }}>
-        <div style={{ width: 36, height: 36, border: `3px solid ${C.border}`, borderTop: `3px solid ${C.primary}`, borderRadius: '50%', animation: 'spin .8s linear infinite', margin: '0 auto 12px' }} />
+    <div className="min-h-screen flex items-center justify-center" style={{ background: C.bg }}>
+      <div className="text-center">
+        <div className="w-9 h-9 rounded-full animate-spin mx-auto mb-3" style={{ border: `3px solid ${C.border}`, borderTopColor: C.primary }} />
         <p style={{ color: C.light, fontSize: 13 }}>Đang tải dữ liệu...</p>
-        <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
       </div>
     </div>
   );
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: C.bg, fontFamily: 'Inter, Segoe UI, sans-serif' }}>
+    <div className="flex min-h-screen" style={{ background: C.bg }}>
 
-      {/* Toast */}
-      {toast && (
-        <div style={{ position: 'fixed', top: 20, right: 20, zIndex: 9999, background: '#0f172a', color: '#fff', padding: '12px 18px', borderRadius: 10, fontSize: 13, fontWeight: 500, boxShadow: '0 8px 24px rgba(0,0,0,.2)', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ color: '#4ade80' }}>✓</span> {toast}
-        </div>
+      {/* Mobile backdrop */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
       {/* Sidebar */}
-      <aside style={{ width: 220, background: C.card, borderRight: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', flexShrink: 0, position: 'sticky', top: 0, height: '100vh', overflowY: 'auto' }}>
-        <div style={{ padding: '20px 20px 16px', borderBottom: `1px solid ${C.border}` }}>
-          <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 10 }}>
-            <img src="/logoo2.png" alt="Logo" style={{ height: 32, width: 'auto', objectFit: 'contain' }} />
-            <div style={{ fontSize: 11, color: C.light }}>Admin Dashboard</div>
+      <aside className={`${sidebarOpen ? 'max-lg:translate-x-0' : 'max-lg:-translate-x-full'} max-lg:fixed max-lg:left-0 max-lg:top-0 max-lg:shadow-2xl max-lg:transition-transform max-lg:duration-200 max-lg:ease w-[220px] flex flex-col shrink-0 sticky top-0 h-screen overflow-y-auto z-50`}
+        style={{ background: C.card, borderRight: `1px solid ${C.border}` }}
+      >
+        <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${C.border}` }}>
+          <Link to="/" className="flex items-center gap-2.5 no-underline">
+            <img src="/logoo2.png" alt="Logo" className="h-8 w-auto object-contain" />
+            <span className="text-[11px] font-semibold" style={{ color: C.light }}>Admin Dashboard</span>
           </Link>
+          <button onClick={() => setSidebarOpen(false)}
+            className="lg:hidden flex items-center justify-center w-6 h-6 bg-transparent border-none cursor-pointer p-0">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
         </div>
 
-        <nav style={{ padding: '12px 10px', flex: 1 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: C.light, textTransform: 'uppercase', letterSpacing: '.06em', padding: '0 10px', marginBottom: 6 }}>Menu</div>
+        <nav className="flex-1 px-2 py-3">
+          <div className="text-[10px] font-bold uppercase tracking-wider px-2.5 mb-1.5" style={{ color: C.light }}>Menu</div>
           {SIDEBAR.map(t => {
             const isActive = activeNav === t.id;
             return (
               <button key={t.id} onClick={() => goTab(t.id)}
-                style={{ width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', marginBottom: 2, transition: 'all .15s', background: isActive ? C.primaryBg : 'transparent', color: isActive ? C.primary : C.muted, fontWeight: isActive ? 700 : 500, fontSize: 13 }}
+                className="w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-lg border-none cursor-pointer mb-0.5 text-[13px] transition-all duration-150"
+                style={{
+                  background: isActive ? C.primaryBg : 'transparent',
+                  color: isActive ? C.primary : C.muted,
+                  fontWeight: isActive ? 700 : 500,
+                }}
                 onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = C.bg; }}
                 onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
               >
-                <span style={{ fontSize: 16, opacity: isActive ? 1 : .7 }}>{t.icon}</span>
+                <span className="text-base" style={{ opacity: isActive ? 1 : 0.7 }}>{t.icon}</span>
                 {t.label}
               </button>
             );
           })}
         </nav>
 
-        <div style={{ padding: '14px 20px', borderTop: `1px solid ${C.border}` }}>
-          <Link to="/" style={{ textDecoration: 'none', color: C.muted, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, fontWeight: 500 }}
+        <div className="px-5 py-3.5" style={{ borderTop: `1px solid ${C.border}` }}>
+          <Link to="/" className="flex items-center gap-1.5 text-[13px] font-medium no-underline transition-colors duration-150"
+            style={{ color: C.muted }}
             onMouseEnter={e => e.currentTarget.style.color = C.text}
             onMouseLeave={e => e.currentTarget.style.color = C.muted}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
@@ -362,59 +428,126 @@ export default function Admin() {
       </aside>
 
       {/* Main */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+      <div className="flex-1 flex flex-col min-w-0">
         {/* Topbar */}
-        <div style={{ background: C.card, borderBottom: `1px solid ${C.border}`, padding: '0 28px', height: 58, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, position: 'sticky', top: 0, zIndex: 10 }}>
-          <h1 style={{ fontSize: 15, fontWeight: 700, color: C.text }}>
-            {tab === 'product-form' ? (editProductId ? 'Chỉnh sửa sản phẩm' : 'Thêm sản phẩm') : SIDEBAR.find(s => s.id === activeNav)?.label}
-          </h1>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ width: 32, height: 32, background: C.primaryBg, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="h-[58px] sticky top-0 z-10 flex items-center justify-between shrink-0 px-4 lg:px-5"
+          style={{ background: C.card, borderBottom: `1px solid ${C.border}` }}>
+          <div className="flex items-center gap-3">
+            <button onClick={() => setSidebarOpen(o => !o)}
+              className="lg:hidden flex items-center justify-center w-8 h-8 rounded-lg border-none cursor-pointer hover:bg-primary-light transition-colors"
+              style={{ background: 'transparent' }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+            </button>
+            <h1 className="text-[15px] font-bold" style={{ color: C.text }}>
+              {tab === 'product-form' ? (editProductId ? 'Chỉnh sửa sản phẩm' : 'Thêm sản phẩm') : SIDEBAR.find(s => s.id === activeNav)?.label}
+            </h1>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 flex items-center justify-center rounded-lg" style={{ background: C.primaryBg }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.primary} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
             </div>
-            <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>Admin</span>
+            <span className="text-[13px] font-semibold" style={{ color: C.text }}>Admin</span>
           </div>
         </div>
 
-        <div style={{ padding: 28, flex: 1, overflowY: 'auto' }}>
+        <div className="flex-1 overflow-y-auto p-5 lg:p-7">
 
           {/* ═══════════ DASHBOARD ═══════════ */}
           {tab === 'dashboard' && (
-            <div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16, marginBottom: 24 }}>
+            <div className="space-y-6">
+              {/* Stats row */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 {[
-                  { label: 'Đơn hàng', val: orders.length, icon: '📋', color: '#2563eb', bg: '#eff6ff' },
-                  { label: 'Đơn mới', val: orders.filter(o => o.status === 'pending').length, icon: '🔔', color: '#ea580c', bg: '#fff7ed' },
-                  { label: 'Doanh thu', val: (totalRevenue / 1e9).toFixed(1) + ' tỷ', icon: '💰', color: '#7c3aed', bg: '#f5f3ff' },
-                  { label: 'Sản phẩm', val: productList.length, icon: '📦', color: '#059669', bg: '#ecfdf5' },
+                  { label: 'Tổng đơn hàng', val: orders.length, icon: '📋', sub: `${orders.filter(o => o.status === 'delivered').length} đã giao`, color: C.primary, bg: C.primaryBg },
+                  { label: 'Đơn chờ xử lý', val: orders.filter(o => o.status === 'pending' || o.status === 'confirmed').length, icon: '⏳', sub: `${orders.filter(o => o.status === 'shipping').length} đang giao`, color: '#c4753b', bg: '#f5ede6' },
+                  { label: 'Doanh thu', val: (totalRevenue / 1e9).toFixed(1) + ' tỷ', icon: '💰', sub: `${totalSold.toLocaleString()} sản phẩm đã bán`, color: '#7c3aed', bg: '#f5f3ff' },
+                  { label: 'Sản phẩm', val: productList.length, icon: '📦', sub: `${productList.filter(p => (p.stock || 0) <= 3).length} sắp hết hàng`, color: '#059669', bg: '#ecfdf5' },
                 ].map(s => (
-                  <div key={s.label} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '18px 20px', display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-                    <div style={{ width: 44, height: 44, background: s.bg, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>{s.icon}</div>
-                    <div>
-                      <div style={{ fontSize: 22, fontWeight: 800, color: s.color }}>{s.val}</div>
-                      <div style={{ fontSize: 12, color: C.muted, marginTop: 2, fontWeight: 500 }}>{s.label}</div>
+                  <div key={s.label} className="rounded-xl p-4 lg:p-5 flex flex-col" style={{ background: C.card, border: `1px solid ${C.border}` }}>
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-2xl">{s.icon}</span>
+                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: s.bg, color: s.color }}>{s.label}</span>
                     </div>
+                    <div className="text-2xl lg:text-[28px] font-black tracking-tight" style={{ color: s.color }}>{s.val}</div>
+                    <div className="text-xs mt-1" style={{ color: C.muted }}>{s.sub}</div>
                   </div>
                 ))}
               </div>
 
-              <div style={tableCard}>
-                <div style={{ padding: '14px 20px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span>🏆</span><span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Top 5 bán chạy</span>
+              {/* Quick actions */}
+              <div className="rounded-xl p-4 lg:p-5" style={{ background: C.card, border: `1px solid ${C.border}` }}>
+                <h3 className="text-sm font-bold mb-3.5 flex items-center gap-2" style={{ color: C.text }}>
+                  <span>⚡</span> Thao tác nhanh
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  <button onClick={() => { setEditProductId(null); setProductForm(EMPTY_PRODUCT); setTab('product-form'); }}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] font-semibold border-none cursor-pointer transition-all hover:-translate-y-0.5" style={{ background: C.primary, color: '#fff' }}>
+                    + Thêm sản phẩm
+                  </button>
+                  <button onClick={() => { setTab('orders'); setOrderFilter('pending'); }}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] font-semibold border-none cursor-pointer transition-all hover:-translate-y-0.5" style={{ background: '#c4753b', color: '#fff' }}>
+                    📋 Xử lý đơn hàng
+                  </button>
+                  <button onClick={() => { setTab('coupons'); setShowCouponForm(true); setCouponForm(EMPTY_COUPON); }}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] font-semibold border-none cursor-pointer transition-all hover:-translate-y-0.5" style={{ background: C.primaryBg, color: C.primary }}>
+                    🎟️ Thêm mã giảm giá
+                  </button>
+                  <button onClick={() => setTab('settings')}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] font-semibold border-none cursor-pointer transition-all hover:-translate-y-0.5" style={{ background: C.bg, color: C.muted }}>
+                    ⚙️ Cài đặt
+                  </button>
                 </div>
-                {[...productList].sort((a, b) => b.sold - a.sold).slice(0, 5).map((p, i) => (
-                  <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 20px', borderBottom: i < 4 ? `1px solid ${C.border}` : 'none', transition: 'background .1s' }}
-                    onMouseEnter={e => e.currentTarget.style.background = C.bg}
-                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                    <span style={{ width: 22, height: 22, borderRadius: '50%', fontSize: 11, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: i < 3 ? '#fff' : C.muted, background: i === 0 ? '#f59e0b' : i === 1 ? '#94a3b8' : i === 2 ? '#f97316' : '#f1f5f9' }}>{i + 1}</span>
-                    <img src={p.images?.[0] || p.image} alt="" style={{ width: 38, height: 38, objectFit: 'contain', borderRadius: 8, border: `1px solid ${C.border}` }} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
-                      <div style={{ fontSize: 12, color: C.light }}>{formatPrice(p.price)}</div>
-                    </div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: '#059669', flexShrink: 0 }}>{(p.sold || 0).toLocaleString()} đã bán</div>
+              </div>
+
+              {/* Two-column widgets */}
+              <div className="grid lg:grid-cols-2 gap-6">
+                {/* Recent orders */}
+                <div className="rounded-xl" style={{ background: C.card, border: `1px solid ${C.border}` }}>
+                  <div className="flex items-center justify-between px-5 py-3.5" style={{ borderBottom: `1px solid ${C.border}` }}>
+                    <h3 className="text-sm font-bold flex items-center gap-2" style={{ color: C.text }}>
+                      <span>📋</span> Đơn hàng gần đây
+                    </h3>
+                    <button onClick={() => setTab('orders')} className="text-xs font-semibold bg-transparent border-none cursor-pointer hover:underline" style={{ color: C.primary }}>Xem tất cả</button>
                   </div>
-                ))}
+                  {orders.length === 0 ? (
+                    <div className="py-8 text-center text-sm" style={{ color: C.light }}>Chưa có đơn hàng</div>
+                  ) : (
+                    [...orders].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 5).map((o, i) => {
+                      const st = ORDER_STATUS[o.status] || ORDER_STATUS.pending;
+                      return (
+                        <div key={o.id} className="flex items-center gap-3 px-5 py-3 cursor-pointer transition-colors hover:bg-[#f9f7f4]" style={{ borderBottom: i < 4 ? `1px solid ${C.border}` : 'none' }}
+                          onClick={() => { setTab('orders'); setExpandedOrder(o.id); }}>
+                          <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0" style={{ background: st.bg, color: st.color }}>#{o.id}</div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-[13px] font-semibold truncate" style={{ color: C.text }}>{o.customer_name}</div>
+                            <div className="text-xs" style={{ color: C.muted }}>{formatPrice(o.total_price || o.total || 0)}</div>
+                          </div>
+                          <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full shrink-0" style={{ background: st.bg, color: st.color }}>{st.label}</span>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                {/* Top selling */}
+                <div className="rounded-xl" style={{ background: C.card, border: `1px solid ${C.border}` }}>
+                  <div className="flex items-center gap-2 px-5 py-3.5" style={{ borderBottom: `1px solid ${C.border}` }}>
+                    <span>🏆</span>
+                    <h3 className="text-sm font-bold" style={{ color: C.text }}>Top 5 bán chạy</h3>
+                  </div>
+                  {[...productList].sort((a, b) => b.sold - a.sold).slice(0, 5).map((p, i) => (
+                    <div key={p.id} className="flex items-center gap-3 px-5 py-3 transition-colors hover:bg-[#f9f7f4]" style={{ borderBottom: i < 4 ? `1px solid ${C.border}` : 'none' }}>
+                      <span className="w-[22px] h-[22px] rounded-full text-[11px] font-extrabold flex items-center justify-center shrink-0 text-white"
+                        style={{ background: i === 0 ? '#f59e0b' : i === 1 ? '#94a3b8' : i === 2 ? '#c4753b' : C.border, color: i > 2 ? C.muted : '#fff' }}>{i + 1}</span>
+                      <img src={p.images?.[0] || p.image} alt="" className="w-[38px] h-[38px] object-contain rounded-lg shrink-0" style={{ border: `1px solid ${C.border}` }} />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[13px] font-semibold truncate" style={{ color: C.text }}>{p.name}</div>
+                        <div className="text-xs" style={{ color: C.light }}>{formatPrice(p.price)}</div>
+                      </div>
+                      <div className="text-[13px] font-bold shrink-0" style={{ color: '#059669' }}>{(p.sold || 0).toLocaleString()}</div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           )}
@@ -424,127 +557,127 @@ export default function Admin() {
             const filtered = orderFilter === 'all' ? orders : orders.filter(o => o.status === orderFilter);
             return (
             <div>
-              {/* Filter tabs */}
-              <div style={{ display: 'flex', gap: 6, marginBottom: 18, flexWrap: 'wrap' }}>
+              {/* Filter tabs with count badges */}
+              <div className="flex gap-1.5 mb-[18px] flex-wrap">
                 {[
-                  { v: 'all', l: `Tất cả (${orders.length})` },
-                  { v: 'pending', l: `Chờ xác nhận (${orders.filter(o => o.status === 'pending').length})` },
-                  { v: 'confirmed', l: `Đã xác nhận (${orders.filter(o => o.status === 'confirmed').length})` },
-                  { v: 'shipping', l: `Đang giao (${orders.filter(o => o.status === 'shipping').length})` },
-                  { v: 'delivered', l: `Đã giao (${orders.filter(o => o.status === 'delivered').length})` },
-                  { v: 'cancelled', l: `Đã hủy (${orders.filter(o => o.status === 'cancelled').length})` },
+                  { v: 'all', l: 'Tất cả', count: orders.length },
+                  { v: 'pending', l: 'Chờ xác nhận', count: orders.filter(o => o.status === 'pending').length },
+                  { v: 'confirmed', l: 'Đã xác nhận', count: orders.filter(o => o.status === 'confirmed').length },
+                  { v: 'shipping', l: 'Đang giao', count: orders.filter(o => o.status === 'shipping').length },
+                  { v: 'delivered', l: 'Đã giao', count: orders.filter(o => o.status === 'delivered').length },
+                  { v: 'cancelled', l: 'Đã hủy', count: orders.filter(o => o.status === 'cancelled').length },
                 ].map(f => (
                   <button key={f.v} onClick={() => setOrderFilter(f.v)}
+                    className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold cursor-pointer border-none transition-all duration-150"
                     style={{
-                      border: 'none', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 600,
-                      cursor: 'pointer', transition: 'all .15s',
                       background: orderFilter === f.v ? C.primary : C.bg,
                       color: orderFilter === f.v ? '#fff' : C.muted,
-                    }}>{f.l}</button>
+                    }}>
+                    {f.l}
+                    <span className="text-[10px] opacity-70">({f.count})</span>
+                  </button>
                 ))}
               </div>
 
               <div style={tableCard}>
                 {filtered.length === 0 ? (
-                  <div style={{ padding: '40px 20px', textAlign: 'center', color: C.light }}>
-                    <div style={{ fontSize: 40, marginBottom: 8 }}>📋</div>
-                    <p style={{ fontSize: 14 }}>Chưa có đơn hàng nào</p>
+                  <div className="py-10 text-center" style={{ color: C.light }}>
+                    <div className="text-4xl mb-2">📋</div>
+                    <p className="text-sm">Chưa có đơn hàng nào</p>
                   </div>
                 ) : (
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                    <thead>
-                      <tr style={{ background: C.bg, borderBottom: `1px solid ${C.border}` }}>
-                        <th style={th}>Mã đơn</th>
-                        <th style={th}>Khách hàng</th>
-                        <th style={{ ...th, textAlign: 'right' }}>Tổng tiền</th>
-                        <th style={{ ...th, textAlign: 'center' }}>Thanh toán</th>
-                        <th style={{ ...th, textAlign: 'center' }}>Trạng thái</th>
-                        <th style={{ ...th, textAlign: 'center' }}>Ngày</th>
-                        <th style={{ ...th, textAlign: 'center' }}>Thao tác</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filtered.map((o, i) => {
-                        const st = ORDER_STATUS[o.status] || ORDER_STATUS.pending;
-                        const isExpanded = expandedOrder === o.id;
-                        const items = typeof o.items === 'string' ? JSON.parse(o.items) : (o.items || []);
-                        return [
-                          <tr key={o.id} style={{ borderBottom: `1px solid ${C.border}`, transition: 'background .1s', cursor: 'pointer' }}
-                            onClick={() => setExpandedOrder(isExpanded ? null : o.id)}
-                            onMouseEnter={e => e.currentTarget.style.background = C.bg}
-                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                            <td style={{ padding: '12px 16px' }}>
-                              <span style={{ fontWeight: 700, color: C.primary }}>#{o.id}</span>
-                            </td>
-                            <td style={{ padding: '12px 16px' }}>
-                              <div style={{ fontWeight: 600, color: C.text }}>{o.customer_name}</div>
-                              <div style={{ fontSize: 12, color: C.light }}>{o.customer_phone || o.phone}</div>
-                            </td>
-                            <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                              <span style={{ fontWeight: 700, color: C.text }}>{formatPrice(o.total_price || o.total || 0)}</span>
-                            </td>
-                            <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                              <span style={{ fontSize: 11, fontWeight: 600, color: C.muted }}>
+                  <div>
+                    {/* Table header - visible on md+ */}
+                    <div className="hidden md:flex items-center px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider" style={{ background: C.bg, color: C.muted, borderBottom: `1px solid ${C.border}` }}>
+                      <div className="w-[90px] shrink-0">Mã đơn</div>
+                      <div className="flex-1 min-w-0">Khách hàng</div>
+                      <div className="w-[100px] text-right shrink-0">Tổng tiền</div>
+                      <div className="w-[80px] text-center shrink-0">TT</div>
+                      <div className="w-[110px] text-center shrink-0">Trạng thái</div>
+                      <div className="w-[80px] text-center shrink-0">Ngày</div>
+                      <div className="w-[110px] text-center shrink-0">Thao tác</div>
+                    </div>
+                    {filtered.map((o, i) => {
+                      const st = ORDER_STATUS[o.status] || ORDER_STATUS.pending;
+                      const isExpanded = expandedOrder === o.id;
+                      const items = typeof o.items === 'string' ? JSON.parse(o.items) : (o.items || []);
+                      return (
+                        <div key={o.id}>
+                          {/* Order row */}
+                          <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-0 px-4 py-3 cursor-pointer transition-colors"
+                            style={{ borderBottom: isExpanded ? 'none' : `1px solid ${C.border}`, background: isExpanded ? C.bg : 'transparent' }}
+                            onClick={() => setExpandedOrder(isExpanded ? null : o.id)}>
+                            <div className="md:w-[90px] shrink-0">
+                              <span className="text-[13px] font-bold" style={{ color: C.primary }}>#{o.id}</span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-[13px] font-semibold truncate" style={{ color: C.text }}>{o.customer_name}</div>
+                              <div className="text-xs md:hidden" style={{ color: C.light }}>{o.customer_phone || o.phone}</div>
+                            </div>
+                            <div className="md:w-[100px] shrink-0 md:text-right">
+                              <span className="text-[13px] font-bold" style={{ color: C.text }}>{formatPrice(o.total_price || o.total || 0)}</span>
+                            </div>
+                            <div className="md:w-[80px] shrink-0 md:text-center">
+                              <span className="text-[11px] font-semibold" style={{ color: C.muted }}>
                                 {o.payment_method === 'bank' ? '🏦 CK' : '💵 COD'}
                               </span>
-                            </td>
-                            <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                              <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, background: st.bg, color: st.color }}>
-                                {st.label}
-                              </span>
-                            </td>
-                            <td style={{ padding: '12px 16px', textAlign: 'center', color: C.light, fontSize: 12, whiteSpace: 'nowrap' }}>
+                            </div>
+                            <div className="md:w-[110px] shrink-0 md:text-center flex md:block items-center gap-2">
+                              <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full inline-block" style={{ background: st.bg, color: st.color }}>{st.label}</span>
+                              <span className="md:hidden text-xs" style={{ color: C.light }}>{new Date(o.created_at).toLocaleDateString('vi-VN')}</span>
+                            </div>
+                            <div className="hidden md:block w-[80px] shrink-0 text-center text-xs" style={{ color: C.light }}>
                               {new Date(o.created_at).toLocaleDateString('vi-VN')}
-                            </td>
-                            <td style={{ padding: '12px 16px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                            </div>
+                            <div className="md:w-[110px] shrink-0 md:text-center" onClick={e => e.stopPropagation()}>
                               <select value={o.status} onChange={async (e) => {
                                 await updateOrder(o.id, { status: e.target.value });
                                 showToast('Đã cập nhật trạng thái!');
                               }}
-                                style={{ border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', fontSize: 11, outline: 'none', cursor: 'pointer', color: C.text, background: '#fff' }}>
+                                className="w-full md:w-auto rounded-md px-2 py-1 text-[11px] outline-none cursor-pointer transition-colors"
+                                style={{ border: `1px solid ${C.border}`, color: C.text, background: '#fff' }}>
                                 <option value="pending">Chờ xác nhận</option>
                                 <option value="confirmed">Xác nhận</option>
                                 <option value="shipping">Đang giao</option>
                                 <option value="delivered">Đã giao</option>
                                 <option value="cancelled">Hủy đơn</option>
                               </select>
-                            </td>
-                          </tr>,
-                          isExpanded && (
-                            <tr key={`${o.id}-detail`}>
-                              <td colSpan={7} style={{ padding: 0, background: '#fafbfc', borderBottom: `1px solid ${C.border}` }}>
-                                <div style={{ padding: '16px 24px' }}>
-                                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 14 }}>
-                                    <div>
-                                      <div style={{ fontSize: 11, fontWeight: 700, color: C.light, textTransform: 'uppercase', marginBottom: 4 }}>Địa chỉ</div>
-                                      <div style={{ fontSize: 13, color: C.text }}>{o.customer_address || o.address || '—'}</div>
-                                    </div>
-                                    <div>
-                                      <div style={{ fontSize: 11, fontWeight: 700, color: C.light, textTransform: 'uppercase', marginBottom: 4 }}>Ghi chú</div>
-                                      <div style={{ fontSize: 13, color: C.text }}>{o.note || '—'}</div>
-                                    </div>
-                                    <div>
-                                      <div style={{ fontSize: 11, fontWeight: 700, color: C.light, textTransform: 'uppercase', marginBottom: 4 }}>Ngày giờ</div>
-                                      <div style={{ fontSize: 13, color: C.text }}>{new Date(o.created_at).toLocaleString('vi-VN')}</div>
-                                    </div>
+                            </div>
+                          </div>
+
+                          {/* Expanded detail */}
+                          {isExpanded && (
+                            <div className="px-4 py-4 md:px-6 grid md:grid-cols-3 gap-4" style={{ background: '#fafbfc', borderBottom: `1px solid ${C.border}` }}>
+                              <div>
+                                <div className="text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: C.light }}>Địa chỉ</div>
+                                <div className="text-[13px]" style={{ color: C.text }}>{o.customer_address || o.address || '—'}</div>
+                                <div className="text-xs mt-0.5" style={{ color: C.light }}>SĐT: {o.customer_phone || o.phone || '—'}</div>
+                              </div>
+                              <div>
+                                <div className="text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: C.light }}>Ghi chú</div>
+                                <div className="text-[13px]" style={{ color: C.text }}>{o.note || '—'}</div>
+                              </div>
+                              <div>
+                                <div className="text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: C.light }}>Ngày giờ</div>
+                                <div className="text-[13px]" style={{ color: C.text }}>{new Date(o.created_at).toLocaleString('vi-VN')}</div>
+                              </div>
+                              <div className="md:col-span-3">
+                                <div className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: C.light }}>Sản phẩm ({items.length})</div>
+                                {items.map((item, j) => (
+                                  <div key={j} className="flex items-center gap-2.5 py-2" style={{ borderBottom: j < items.length - 1 ? `1px solid ${C.border}50` : 'none' }}>
+                                    {item.image && <img src={item.image} alt="" className="w-9 h-9 object-contain rounded-md shrink-0" style={{ border: `1px solid ${C.border}` }} />}
+                                    <div className="flex-1 text-[13px]" style={{ color: C.text }}>{item.name}</div>
+                                    <div className="text-xs shrink-0" style={{ color: C.muted }}>x{item.qty}</div>
+                                    <div className="text-[13px] font-bold shrink-0" style={{ color: C.primary }}>{formatPrice(item.price * item.qty)}</div>
                                   </div>
-                                  <div style={{ fontSize: 11, fontWeight: 700, color: C.light, textTransform: 'uppercase', marginBottom: 8 }}>Sản phẩm ({items.length})</div>
-                                  {items.map((item, j) => (
-                                    <div key={j} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '8px 0', borderBottom: j < items.length - 1 ? `1px solid ${C.border}` : 'none' }}>
-                                      {item.image && <img src={item.image} alt="" style={{ width: 36, height: 36, objectFit: 'contain', borderRadius: 6, border: `1px solid ${C.border}` }} />}
-                                      <div style={{ flex: 1, fontSize: 13, color: C.text }}>{item.name}</div>
-                                      <div style={{ fontSize: 12, color: C.muted }}>x{item.qty}</div>
-                                      <div style={{ fontSize: 13, fontWeight: 700, color: C.primary }}>{formatPrice(item.price * item.qty)}</div>
-                                    </div>
-                                  ))}
-                                </div>
-                              </td>
-                            </tr>
-                          ),
-                        ];
-                      })}
-                    </tbody>
-                  </table>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
             </div>
@@ -554,17 +687,18 @@ export default function Admin() {
           {/* ═══════════ PRODUCTS ═══════════ */}
           {tab === 'products' && (
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
-                <div style={{ position: 'relative' }}>
-                  <svg style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.light} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <div className="flex items-center justify-between mb-[18px] flex-wrap gap-3">
+                <div className="relative">
+                  <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.light} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                   <input value={productSearch} onChange={e => setProductSearch(e.target.value)} placeholder="Tìm sản phẩm..."
-                    style={{ border: `1.5px solid ${C.border}`, borderRadius: 8, padding: '8px 12px 8px 32px', fontSize: 13, outline: 'none', color: C.text, background: C.card, width: 260 }}
+                    className="w-[200px] lg:w-[260px] rounded-lg px-3 py-2 pl-8 text-[13px] outline-none transition-colors"
+                    style={{ border: `1.5px solid ${C.border}`, color: C.text, background: C.card }}
                     onFocus={e => e.target.style.borderColor = C.primary}
                     onBlur={e => e.target.style.borderColor = C.border} />
                 </div>
-                <div style={{ display: 'flex', gap: 8 }}>
+                <div className="flex gap-2">
                   <Btn variant="ghost" onClick={downloadExcelTemplate}>📄 Tải mẫu Excel</Btn>
-                  <input ref={csvFileRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={handleExcelImport} />
+                  <input ref={csvFileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleExcelImport} />
                   <Btn variant="soft" disabled={csvImporting} onClick={() => csvFileRef.current.click()}>
                     {csvImporting ? '⏳ Đang import...' : '📥 Import Excel'}
                   </Btn>
@@ -575,59 +709,86 @@ export default function Admin() {
               </div>
 
               <div style={tableCard}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                  <thead>
-                    <tr style={{ background: C.bg, borderBottom: `1px solid ${C.border}` }}>
-                      <th style={th}>Sản phẩm</th>
-                      <th style={th}>Danh mục</th>
-                      <th style={{ ...th, textAlign: 'right' }}>Giá bán</th>
-                      <th style={{ ...th, textAlign: 'center' }}>Trạng thái</th>
-                      <th style={{ ...th, textAlign: 'center' }}>Thao tác</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredProducts.map((p, i) => {
-                      const cat = categories.find(c => c.id === p.categoryId);
-                      return (
-                        <tr key={p.id} style={{ borderBottom: i < filteredProducts.length - 1 ? `1px solid ${C.border}` : 'none', transition: 'background .1s' }}
-                          onMouseEnter={e => e.currentTarget.style.background = C.bg}
-                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                          <td style={{ padding: '12px 16px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                              <img src={p.images?.[0] || p.image} alt="" style={{ width: 40, height: 40, objectFit: 'contain', borderRadius: 8, border: `1px solid ${C.border}`, flexShrink: 0 }} />
-                              <span style={{ fontWeight: 600, color: C.text, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>{p.name}</span>
-                            </div>
-                          </td>
-                          <td style={{ padding: '12px 16px' }}>
-                            <span style={{ fontSize: 12, color: C.muted }}>{cat?.icon} {cat?.name}</span>
-                          </td>
-                          <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                            <span style={{ fontWeight: 700, color: C.primary }}>{formatPrice(p.price)}</span>
-                          </td>
-                          <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                            <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
-                              {p.isNew && <span style={{ fontSize: 11, background: '#ecfdf5', color: '#059669', padding: '2px 8px', borderRadius: 10, fontWeight: 600 }}>Mới</span>}
-                              {p.isSale && <span style={{ fontSize: 11, background: '#fff7ed', color: '#ea580c', padding: '2px 8px', borderRadius: 10, fontWeight: 600 }}>Sale</span>}
-                              {!p.isNew && !p.isSale && <span style={{ fontSize: 11, color: C.light }}>—</span>}
-                            </div>
-                          </td>
-                          <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                            <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
-                              <button onClick={() => { setEditProductId(p.id); setProductForm({ name: p.name, slug: p.slug, categoryId: p.categoryId, price: p.price, originalPrice: p.originalPrice || p.price, images: p.images || [], description: p.description || '', content: p.content || [], specs: Object.entries(p.specs || {}).map(([key, value]) => ({ key, value })), isNew: p.isNew || false, isSale: p.isSale || false }); setTab('product-form'); }}
-                                style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 6, border: `1px solid ${C.border}`, background: 'transparent', color: C.primary, cursor: 'pointer', transition: 'all .15s' }}
-                                onMouseEnter={e => { e.currentTarget.style.background = C.primaryBg; e.currentTarget.style.borderColor = C.primary; }}
-                                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = C.border; }}>Sửa</button>
-                              <button onClick={() => setDelConfirm({ type: 'product', id: p.id })}
-                                style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 6, border: '1px solid #fecdd3', background: 'transparent', color: '#e11d48', cursor: 'pointer', transition: 'all .15s' }}
-                                onMouseEnter={e => e.currentTarget.style.background = '#fff1f2'}
-                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>Xóa</button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                {/* Desktop header */}
+                <div className="hidden md:flex items-center px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider" style={{ background: C.bg, color: C.muted, borderBottom: `1px solid ${C.border}` }}>
+                  <div className="flex-1 min-w-0">Sản phẩm</div>
+                  <div className="w-[110px] shrink-0">Danh mục</div>
+                  <div className="w-[100px] text-right shrink-0">Giá bán</div>
+                  <div className="w-[60px] text-center shrink-0">Kho</div>
+                  <div className="w-[60px] text-center shrink-0">Đã bán</div>
+                  <div className="w-[80px] text-center shrink-0">Trạng thái</div>
+                  <div className="w-[100px] text-center shrink-0">Thao tác</div>
+                </div>
+                {filteredProducts.length === 0 ? (
+                  <div className="py-10 text-center text-sm" style={{ color: C.light }}>Không tìm thấy sản phẩm nào</div>
+                ) : filteredProducts.map((p, i) => {
+                  const cat = categories.find(c => c.id === p.categoryId);
+                  const lowStock = (p.stock || 0) <= 3 && (p.stock || 0) > 0;
+                  const outOfStock = (p.stock || 0) === 0;
+                  return (
+                    <div key={p.id} className="flex flex-col md:flex-row md:items-center gap-2 md:gap-0 px-4 py-3 transition-colors"
+                      style={{ borderBottom: i < filteredProducts.length - 1 ? `1px solid ${C.border}` : 'none' }}>
+                      {/* Product info */}
+                      <div className="flex-1 min-w-0 flex items-center gap-2.5">
+                        <img src={p.images?.[0] || p.image} alt="" className="w-10 h-10 object-contain rounded-lg shrink-0" style={{ border: `1px solid ${C.border}` }} />
+                        <span className="text-[13px] font-semibold truncate" style={{ color: C.text }}>{p.name}</span>
+                      </div>
+                      {/* Category */}
+                      <div className="md:w-[110px] shrink-0">
+                        <span className="text-xs md:hidden font-bold" style={{ color: C.light }}>Danh mục: </span>
+                        <span className="text-xs" style={{ color: C.muted }}>{cat?.name || '—'}</span>
+                      </div>
+                      {/* Price */}
+                      <div className="md:w-[100px] shrink-0 md:text-right">
+                        <span className="text-xs md:hidden font-bold" style={{ color: C.light }}>Giá: </span>
+                        <span className="text-[13px] font-bold" style={{ color: C.primary }}>{formatPrice(p.price)}</span>
+                      </div>
+                      {/* Stock */}
+                      <div className="md:w-[60px] shrink-0 md:text-center flex md:block items-center gap-1">
+                        <span className="text-xs md:hidden font-bold" style={{ color: C.light }}>Kho: </span>
+                        <span className="text-[13px] font-semibold" style={{
+                          color: outOfStock ? '#e11d48' : lowStock ? '#c4753b' : '#059669'
+                        }}>
+                          {outOfStock ? 'Hết' : p.stock || 0}
+                        </span>
+                      </div>
+                      {/* Sold */}
+                      <div className="md:w-[60px] shrink-0 md:text-center">
+                        <span className="text-xs md:hidden font-bold" style={{ color: C.light }}>Đã bán: </span>
+                        <span className="text-[13px] font-semibold" style={{ color: C.muted }}>{(p.sold || 0).toLocaleString()}</span>
+                      </div>
+                      {/* Status badges */}
+                      <div className="md:w-[80px] shrink-0 md:text-center flex md:block gap-1">
+                        {p.isNew && <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ background: '#ecfdf5', color: '#059669' }}>Mới</span>}
+                        {p.isSale && <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ background: '#fff7ed', color: '#ea580c' }}>Sale</span>}
+                        {!p.isNew && !p.isSale && <span className="text-[11px]" style={{ color: C.light }}>—</span>}
+                      </div>
+                      {/* Actions */}
+                      <div className="md:w-[100px] shrink-0 md:text-center flex gap-1.5">
+                        <button onClick={() => { setEditProductId(p.id); setProductForm({ name: p.name, slug: p.slug, categoryId: p.categoryId, price: p.price, originalPrice: p.originalPrice || p.price, images: p.images || [], description: p.description || '', content: p.content || [], specs: Object.entries(p.specs || {}).map(([key, value]) => ({ key, value })), isNew: p.isNew || false, isSale: p.isSale || false, stock: p.stock || '', sold: p.sold || '' }); setTab('product-form'); }}
+                          className="text-xs font-semibold px-2.5 py-1 rounded-md border cursor-pointer transition-all"
+                          style={{ borderColor: C.border, color: C.primary, background: 'transparent' }}
+                          onMouseEnter={e => { e.currentTarget.style.background = C.primaryBg; e.currentTarget.style.borderColor = C.primary; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = C.border; }}>Sửa</button>
+                        <button onClick={() => setDelConfirm({ type: 'product', id: p.id })}
+                          className="text-xs font-semibold px-2.5 py-1 rounded-md border cursor-pointer transition-all"
+                          style={{ borderColor: '#fecdd3', color: '#e11d48', background: 'transparent' }}
+                          onMouseEnter={e => e.currentTarget.style.background = '#fff1f2'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>Xóa</button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Stock management */}
+              <div style={{ ...tableCard, marginTop: 20, padding: 20 }}>
+                <SectionTitle>Cập nhật tồn kho</SectionTitle>
+                <StockManager products={productList} onUpdate={async (id, stock, sold) => {
+                  await supabase.from('products').update({ stock, sold }).eq('id', id);
+                  showToast('Đã cập nhật tồn kho!');
+                  fetchAdminData();
+                }} />
               </div>
             </div>
           )}
@@ -635,11 +796,12 @@ export default function Admin() {
           {/* ═══════════ PRODUCT FORM ═══════════ */}
           {tab === 'product-form' && (
             <div>
-              <button onClick={() => setTab('products')} style={{ display: 'flex', alignItems: 'center', gap: 6, border: 'none', background: 'none', color: C.muted, fontSize: 13, cursor: 'pointer', marginBottom: 20, fontWeight: 500, padding: 0 }}>
+              <button onClick={() => setTab('products')} className="flex items-center gap-1.5 bg-transparent border-none text-[13px] font-medium cursor-pointer mb-5 p-0 transition-colors hover:text-primary"
+                style={{ color: C.muted }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
                 Quay lại danh sách
               </button>
-              <form onSubmit={handleProductSubmit} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 28 }}>
+              <form onSubmit={handleProductSubmit} className="rounded-xl p-5 lg:p-7" style={{ background: C.card, border: `1px solid ${C.border}` }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                   <div style={{ gridColumn: '1/-1' }}>
                     <FInput label="Tên sản phẩm *" required value={productForm.name}
@@ -652,6 +814,8 @@ export default function Admin() {
                   </FSelect>
                   <FInput label="Giá bán (VND) *" required type="number" value={productForm.price} onChange={e => setProductForm(f => ({ ...f, price: e.target.value }))} placeholder="34990000" />
                   <FInput label="Giá gốc (VND)" type="number" value={productForm.originalPrice} onChange={e => setProductForm(f => ({ ...f, originalPrice: e.target.value }))} placeholder="37990000" />
+                  <FInput label="Tồn kho" type="number" value={productForm.stock} onChange={e => setProductForm(f => ({ ...f, stock: e.target.value }))} placeholder="10" />
+                  <FInput label="Đã bán" type="number" value={productForm.sold} onChange={e => setProductForm(f => ({ ...f, sold: e.target.value }))} placeholder="0" />
                   <div style={{ gridColumn: '1/-1' }}>
                     <Field label="Hình ảnh sản phẩm *">
                       <input ref={productFileRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={async (e) => {
@@ -662,7 +826,7 @@ export default function Admin() {
                           try {
                             const url = await uploadImage(file, 'products');
                             setProductForm(f => ({ ...f, images: [...(f.images || []), url] }));
-                          } catch (err) { alert('Upload lỗi: ' + err.message); }
+                          } catch (err) { showToast('Upload lỗi: ' + err.message, 'error'); }
                         }
                         setUploading(false);
                         e.target.value = '';
@@ -775,7 +939,7 @@ export default function Admin() {
                                         try {
                                           const url = await uploadImage(file, 'content');
                                           const c = [...productForm.content]; c[i] = { ...block, url }; setProductForm(f => ({ ...f, content: c }));
-                                        } catch (err) { alert('Upload lỗi: ' + err.message); }
+                                        } catch (err) { showToast('Upload lỗi: ' + err.message, 'error'); }
                                         setUploading(false);
                                       };
                                       input.click();
@@ -891,8 +1055,8 @@ export default function Admin() {
               </div>
 
               {showCatForm && (
-                <form onSubmit={handleCatSubmit} style={{ background: C.card, border: `1.5px solid ${C.primary}`, borderRadius: 12, padding: 20, marginBottom: 18 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: C.primary, marginBottom: 14 }}>
+                <form onSubmit={handleCatSubmit} className="rounded-xl p-5 mb-[18px]" style={{ background: C.card, border: `1.5px solid ${C.primary}` }}>
+                  <div className="text-[13px] font-bold mb-3.5" style={{ color: C.primary }}>
                     {editCatId ? 'Chỉnh sửa danh mục' : catForm.parent_id ? `Thêm danh mục con vào "${categories.find(c => c.id === parseInt(catForm.parent_id))?.name || ''}"` : 'Thêm danh mục cha mới'}
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 16 }}>
@@ -945,8 +1109,8 @@ export default function Admin() {
               </div>
 
               {showCouponForm && (
-                <form onSubmit={handleCouponSubmit} style={{ background: C.card, border: `1.5px solid ${C.primary}`, borderRadius: 12, padding: 20, marginBottom: 18 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: C.primary, marginBottom: 14 }}>
+                <form onSubmit={handleCouponSubmit} className="rounded-xl p-5 mb-[18px]" style={{ background: C.card, border: `1.5px solid ${C.primary}` }}>
+                  <div className="text-[13px] font-bold mb-3.5" style={{ color: C.primary }}>
                     {editCouponId ? '✏️ Chỉnh sửa mã giảm giá' : '➕ Thêm mã giảm giá mới'}
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12, marginBottom: 16 }}>
@@ -954,6 +1118,8 @@ export default function Admin() {
                     <FInput label="Giảm (%)" required type="number" min="1" max="100" value={couponForm.discount_percent} onChange={e => setCouponForm(f => ({ ...f, discount_percent: e.target.value }))} placeholder="20" />
                     <FInput label="Đơn tối thiểu (₫)" type="number" value={couponForm.min_order} onChange={e => setCouponForm(f => ({ ...f, min_order: e.target.value }))} placeholder="500000" />
                     <FInput label="Hạn sử dụng" type="date" value={couponForm.expires_at} onChange={e => setCouponForm(f => ({ ...f, expires_at: e.target.value }))} />
+                    <FInput label="Tổng lượt tối đa" type="number" value={couponForm.max_uses} onChange={e => setCouponForm(f => ({ ...f, max_uses: e.target.value }))} placeholder="Để trống nếu không giới hạn" />
+                    <FInput label="Lượt tối đa/user" type="number" min="1" value={couponForm.max_uses_per_user} onChange={e => setCouponForm(f => ({ ...f, max_uses_per_user: e.target.value }))} placeholder="1" />
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <Btn type="submit">{editCouponId ? 'Cập nhật' : 'Thêm mã'}</Btn>
@@ -975,6 +1141,7 @@ export default function Admin() {
                         <th style={th}>Mã code</th>
                         <th style={{ ...th, textAlign: 'center' }}>Giảm</th>
                         <th style={{ ...th, textAlign: 'right' }}>Đơn tối thiểu</th>
+                        <th style={{ ...th, textAlign: 'center' }}>Đã dùng</th>
                         <th style={{ ...th, textAlign: 'center' }}>Hạn dùng</th>
                         <th style={{ ...th, textAlign: 'center' }}>Trạng thái</th>
                         <th style={{ ...th, textAlign: 'center' }}>Thao tác</th>
@@ -994,6 +1161,11 @@ export default function Admin() {
                           <td style={{ padding: '12px 16px', textAlign: 'right', color: C.muted }}>
                             {c.min_order > 0 ? formatPrice(c.min_order) : '—'}
                           </td>
+                          <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: c.max_uses && c.used_count >= c.max_uses ? '#e11d48' : C.text }}>
+                              {c.used_count || 0}{c.max_uses ? `/${c.max_uses}` : ''}
+                            </span>
+                          </td>
                           <td style={{ padding: '12px 16px', textAlign: 'center', color: C.muted, fontSize: 12 }}>
                             {c.expires_at ? new Date(c.expires_at).toLocaleDateString('vi-VN') : '—'}
                           </td>
@@ -1005,7 +1177,7 @@ export default function Admin() {
                           </td>
                           <td style={{ padding: '12px 16px', textAlign: 'center' }}>
                             <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
-                              <button onClick={() => { setEditCouponId(c.id); setCouponForm({ code: c.code, discount_percent: c.discount_percent, min_order: c.min_order || '', expires_at: c.expires_at || '', is_active: c.is_active }); setShowCouponForm(true); }}
+                              <button onClick={() => { setEditCouponId(c.id); setCouponForm({ code: c.code, discount_percent: c.discount_percent, min_order: c.min_order || '', max_uses: c.max_uses || '', max_uses_per_user: c.max_uses_per_user || '1', expires_at: c.expires_at || '', is_active: c.is_active }); setShowCouponForm(true); }}
                                 style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 6, border: `1px solid ${C.border}`, background: 'transparent', color: C.primary, cursor: 'pointer', transition: 'all .15s' }}
                                 onMouseEnter={e => { e.currentTarget.style.background = C.primaryBg; e.currentTarget.style.borderColor = C.primary; }}
                                 onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = C.border; }}>Sửa</button>
@@ -1038,8 +1210,8 @@ export default function Admin() {
                       try {
                         const url = await uploadImage(file, 'banners');
                         const { error } = await addBanner({ image_url: url, sort_order: banners.length });
-                        if (error) { alert('Lỗi lưu vào database: ' + error.message); continue; }
-                      } catch (err) { alert('Upload lỗi: ' + err.message); }
+                        if (error) { showToast('Lỗi lưu vào database: ' + error.message, 'error'); continue; }
+                      } catch (err) { showToast('Upload lỗi: ' + err.message, 'error'); }
                     }
                     setUploading(false);
                     e.target.value = '';
@@ -1052,8 +1224,8 @@ export default function Admin() {
               </div>
 
               {banners.length > 1 && (
-                <div style={{ background: C.primaryBg, border: `1px solid ${C.primary}20`, borderRadius: 8, padding: '8px 14px', marginBottom: 14, fontSize: 12, color: C.primary, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontSize: 15 }}>💡</span> Kéo thả để thay đổi vị trí banner
+                <div className="flex items-center gap-1.5 rounded-lg px-3.5 py-2 mb-3.5 text-xs font-medium" style={{ background: C.primaryBg, border: `1px solid ${C.primary}20`, color: C.primary }}>
+                  <span className="text-[15px]">💡</span> Kéo thả để thay đổi vị trí banner
                 </div>
               )}
 
@@ -1108,6 +1280,115 @@ export default function Admin() {
             </div>
           )}
 
+          {/* ═══════════ PAYMENTS ═══════════ */}
+          {tab === 'payments' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+              {/* Payment transactions */}
+              <div>
+                <SectionTitle>Giao dịch thanh toán ({payments.length})</SectionTitle>
+                <div style={tableCard}>
+                  {payments.length === 0 ? (
+                    <div style={{ padding: '40px 20px', textAlign: 'center', color: C.light }}>
+                      <div style={{ fontSize: 40, marginBottom: 8 }}>💳</div>
+                      <p style={{ fontSize: 14 }}>Chưa có giao dịch nào</p>
+                    </div>
+                  ) : (
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                      <thead>
+                        <tr style={{ background: C.bg, borderBottom: `1px solid ${C.border}` }}>
+                          <th style={th}>Mã ĐH</th>
+                          <th style={th}>Phương thức</th>
+                          <th style={{ ...th, textAlign: 'right' }}>Số tiền</th>
+                          <th style={{ ...th, textAlign: 'center' }}>Trạng thái</th>
+                          <th style={{ ...th, textAlign: 'center' }}>Ngày</th>
+                          <th style={{ ...th, textAlign: 'center' }}>Xác nhận</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {payments.map((p, i) => (
+                          <tr key={p.id} style={{ borderBottom: i < payments.length - 1 ? `1px solid ${C.border}` : 'none' }}
+                            onMouseEnter={e => e.currentTarget.style.background = C.bg}
+                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                            <td style={{ padding: '12px 16px', fontWeight: 600 }}>#{p.order_id}</td>
+                            <td style={{ padding: '12px 16px', color: C.muted, textTransform: 'uppercase', fontWeight: 500 }}>{p.payment_method === 'bank' ? '🏦 Chuyển khoản' : '💵 COD'}</td>
+                            <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700, color: C.text }}>{formatPrice(p.amount)}</td>
+                            <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                              <span style={{
+                                display: 'inline-block', padding: '2px 10px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+                                background: p.status === 'confirmed' ? '#dcfce7' : p.status === 'failed' ? '#fee2e2' : p.status === 'refunded' ? '#fef3c7' : '#f1f5f9',
+                                color: p.status === 'confirmed' ? '#15803d' : p.status === 'failed' ? '#b91c1c' : p.status === 'refunded' ? '#b45309' : '#64748b',
+                              }}>
+                                {p.status === 'pending' ? 'Chờ thanh toán' : p.status === 'confirmed' ? 'Đã nhận' : p.status === 'failed' ? 'Thất bại' : 'Đã hoàn'}
+                              </span>
+                            </td>
+                            <td style={{ padding: '12px 16px', textAlign: 'center', color: C.light, fontSize: 12, whiteSpace: 'nowrap' }}>
+                              {new Date(p.created_at).toLocaleDateString('vi-VN')}
+                            </td>
+                            <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                              {p.status === 'pending' ? (
+                                <button onClick={async () => {
+                                  await supabase.from('payment_transactions').update({ status: 'confirmed', confirmed_at: new Date().toISOString() }).eq('id', p.id);
+                                  showToast('Đã xác nhận thanh toán!');
+                                  fetchAdminData();
+                                }} style={{ padding: '5px 12px', borderRadius: 6, border: 'none', background: C.primary, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                                  Xác nhận
+                                </button>
+                              ) : p.status === 'confirmed' && p.confirmed_at ? (
+                                <span style={{ fontSize: 12, color: C.light }}>
+                                  {new Date(p.confirmed_at).toLocaleString('vi-VN')}
+                                </span>
+                              ) : <span style={{ fontSize: 12, color: C.light }}>—</span>}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </div>
+
+              {/* Coupon usage */}
+              <div>
+                <SectionTitle>Lịch sử sử dụng mã giảm giá ({couponUsage.length})</SectionTitle>
+                <div style={tableCard}>
+                  {couponUsage.length === 0 ? (
+                    <div style={{ padding: '40px 20px', textAlign: 'center', color: C.light }}>
+                      <div style={{ fontSize: 40, marginBottom: 8 }}>🎟️</div>
+                      <p style={{ fontSize: 14 }}>Chưa có lượt sử dụng mã giảm giá</p>
+                    </div>
+                  ) : (
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                      <thead>
+                        <tr style={{ background: C.bg, borderBottom: `1px solid ${C.border}` }}>
+                          <th style={th}>Mã</th>
+                          <th style={th}>Khách hàng</th>
+                          <th style={{ ...th, textAlign: 'right' }}>Giảm</th>
+                          <th style={{ ...th, textAlign: 'center' }}>Mã ĐH</th>
+                          <th style={{ ...th, textAlign: 'center' }}>Ngày</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {couponUsage.map((u, i) => (
+                          <tr key={u.id} style={{ borderBottom: i < couponUsage.length - 1 ? `1px solid ${C.border}` : 'none' }}
+                            onMouseEnter={e => e.currentTarget.style.background = C.bg}
+                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                            <td style={{ padding: '12px 16px', fontWeight: 700, fontFamily: 'monospace', color: C.primary }}>{u.coupons?.code || '—'}</td>
+                            <td style={{ padding: '12px 16px', color: C.text }}>{u.customer_name || '—'}</td>
+                            <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: '#dc2626' }}>-{formatPrice(u.discount_amount)}</td>
+                            <td style={{ padding: '12px 16px', textAlign: 'center', fontWeight: 600 }}>#{u.order_id}</td>
+                            <td style={{ padding: '12px 16px', textAlign: 'center', color: C.light, fontSize: 12, whiteSpace: 'nowrap' }}>
+                              {new Date(u.used_at).toLocaleDateString('vi-VN')}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* ═══════════ REVIEWS ═══════════ */}
           {tab === 'reviews' && (
             <div>
@@ -1134,10 +1415,11 @@ export default function Admin() {
                       <tr style={{ background: C.bg, borderBottom: `1px solid ${C.border}` }}>
                         <th style={th}>Sản phẩm</th>
                         <th style={th}>Khách hàng</th>
+                        <th style={th}>Email</th>
                         <th style={{ ...th, textAlign: 'center' }}>Điểm</th>
                         <th style={th}>Nội dung</th>
                         <th style={{ ...th, textAlign: 'center' }}>Ngày</th>
-                        <th style={{ ...th, textAlign: 'center' }}>Xóa</th>
+                        <th style={{ ...th, textAlign: 'center' }}>Thao tác</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1152,6 +1434,7 @@ export default function Admin() {
                             </div>
                           </td>
                           <td style={{ padding: '12px 16px', fontWeight: 500, color: C.text }}>{r.customer_name}</td>
+                          <td style={{ padding: '12px 16px', fontSize: 12, color: C.light }}>{r.profiles?.email || '—'}</td>
                           <td style={{ padding: '12px 16px', textAlign: 'center' }}><Stars n={r.rating} /></td>
                           <td style={{ padding: '12px 16px', color: C.muted, maxWidth: 260 }}>
                             <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.comment || '—'}</span>
@@ -1160,10 +1443,22 @@ export default function Admin() {
                             {new Date(r.created_at).toLocaleDateString('vi-VN')}
                           </td>
                           <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                            <button onClick={() => setDelConfirm({ type: 'review', id: r.id })}
-                              style={{ width: 28, height: 28, border: 'none', background: '#f1f5f9', borderRadius: 6, cursor: 'pointer', fontSize: 12, color: C.light, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', transition: 'all .15s' }}
-                              onMouseEnter={e => { e.currentTarget.style.background = '#fee2e2'; e.currentTarget.style.color = '#e11d48'; }}
-                              onMouseLeave={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = C.light; }}>✕</button>
+                            <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+                              {r.is_approved === false && (
+                                <button onClick={async () => {
+                                  await supabase.from('reviews').update({ is_approved: true }).eq('id', r.id);
+                                  showToast('Đã phê duyệt đánh giá!');
+                                  fetchAdminData();
+                                }}
+                                  style={{ fontSize: 12, fontWeight: 600, padding: '5px 10px', borderRadius: 6, border: 'none', background: '#ecfdf5', color: '#059669', cursor: 'pointer', transition: 'all .15s' }}>
+                                  Duyệt
+                                </button>
+                              )}
+                              <button onClick={() => setDelConfirm({ type: 'review', id: r.id })}
+                                style={{ width: 28, height: 28, border: 'none', background: '#f1f5f9', borderRadius: 6, cursor: 'pointer', fontSize: 12, color: C.light, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', transition: 'all .15s' }}
+                                onMouseEnter={e => { e.currentTarget.style.background = '#fee2e2'; e.currentTarget.style.color = '#e11d48'; }}
+                                onMouseLeave={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = C.light; }}>✕</button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -1239,7 +1534,7 @@ export default function Admin() {
                 <div style={{ display: 'flex', gap: 10 }}>
                   <Btn onClick={async () => {
                     const { error } = await updateSettings(sf);
-                    if (error) alert('Lỗi: ' + error.message);
+                    if (error) showToast('Lỗi: ' + error.message, 'error');
                     else showToast('Đã lưu cài đặt!');
                   }} style={{ padding: '12px 28px' }}>💾 Lưu cài đặt</Btn>
                   <Btn variant="ghost" onClick={() => setSf({ ...settings })} style={{ padding: '12px 20px' }}>Hoàn tác</Btn>
@@ -1254,12 +1549,12 @@ export default function Admin() {
 
       {/* Delete modal */}
       {delConfirm && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.4)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: 16 }}>
-          <div style={{ background: C.card, borderRadius: 16, padding: 28, maxWidth: 340, width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,.2)' }}>
-            <div style={{ width: 48, height: 48, background: '#fff1f2', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, margin: '0 auto 14px' }}>🗑️</div>
-            <h3 style={{ textAlign: 'center', fontWeight: 700, fontSize: 16, color: C.text, marginBottom: 8 }}>Xác nhận xóa</h3>
-            <p style={{ textAlign: 'center', fontSize: 13, color: C.muted, marginBottom: 20 }}>Thao tác này không thể hoàn tác.</p>
-            <div style={{ display: 'flex', gap: 10 }}>
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
+          <div className="bg-white rounded-2xl p-7 max-w-sm w-full" style={{ boxShadow: '0 20px 60px rgba(0,0,0,.2)' }}>
+            <div className="w-12 h-12 bg-red-50 rounded-xl flex items-center justify-center text-2xl mx-auto mb-3.5">🗑️</div>
+            <h3 className="text-center font-bold text-base mb-2" style={{ color: C.text }}>Xác nhận xóa</h3>
+            <p className="text-center text-[13px] mb-5" style={{ color: C.muted }}>Thao tác này không thể hoàn tác.</p>
+            <div className="flex gap-2.5">
               <Btn variant="danger" onClick={confirmDelete} style={{ flex: 1, justifyContent: 'center', padding: '11px' }}>Xóa</Btn>
               <Btn variant="ghost" onClick={() => setDelConfirm(null)} style={{ flex: 1, justifyContent: 'center', padding: '11px' }}>Hủy</Btn>
             </div>

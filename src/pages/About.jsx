@@ -1,10 +1,12 @@
 import { Link } from 'react-router-dom';
 import usePageTitle from '../hooks/usePageTitle';
+import SEO from '../components/SEO';
 
 export default function About() {
   usePageTitle('Về cửa hàng');
   return (
     <div style={{ background: '#f1f5f9', minHeight: '100vh' }}>
+      <SEO title="Về cửa hàng" description="MOCA Living là thương hiệu nội thất chuyên cung cấp sofa, bàn ghế, tủ kệ, đèn trang trí và phụ kiện nội thất thiết kế hiện đại, chất lượng cao." />
       <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 16px' }}>
         <nav style={{ fontSize: 12, color: '#94a3b8', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 6 }}>
           <Link to="/" style={{ color: '#64748b', textDecoration: 'none', fontWeight: 500 }}>Trang chủ</Link>

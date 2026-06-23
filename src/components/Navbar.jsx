@@ -4,6 +4,8 @@ import { useCart } from '../context/CartContext';
 import { useAdmin } from '../context/AdminContext';
 import { useAuth } from '../context/AuthContext';
 import { useWishlist } from '../context/WishlistContext';
+import { useToast } from '../context/ToastContext';
+import { supabase } from '../lib/supabase';
 import {
   MagnifyingGlassIcon,
   UserIcon,
@@ -32,6 +34,11 @@ export default function Navbar() {
   const [loginPass, setLoginPass] = useState('');
   const [loginError, setLoginError] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotSent, setForgotSent] = useState(false);
+  const { showToast } = useToast();
   const megaRef = useRef(null);
   const accountRef = useRef(null);
   const navigate = useNavigate();
@@ -64,6 +71,22 @@ export default function Navbar() {
     setLoginLoading(false);
     if (error) setLoginError('Email hoặc mật khẩu không đúng');
     else { setAccountOpen(false); setLoginEmail(''); setLoginPass(''); }
+  };
+
+  const handleForgotPassword = async (e) => {
+    e.preventDefault();
+    setForgotLoading(true);
+    setForgotSent(false);
+    const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
+      redirectTo: `${window.location.origin}/tai-khoan`,
+    });
+    setForgotLoading(false);
+    if (error) {
+      showToast(error.message || 'Có lỗi xảy ra, vui lòng thử lại', 'error');
+    } else {
+      setForgotSent(true);
+      showToast('Email đặt lại mật khẩu đã được gửi!', 'success');
+    }
   };
 
   const handleLogout = async () => {
@@ -175,7 +198,13 @@ export default function Navbar() {
                         </button>
                       </form>
 
-                      <div className="mt-4 text-center text-sm text-slate-400">
+                      <div className="mt-3 text-center">
+                        <button onClick={() => { setForgotOpen(true); setForgotEmail(loginEmail); }} className="bg-transparent border-none text-sm text-blue-600 font-semibold cursor-pointer hover:underline">
+                          Quên mật khẩu?
+                        </button>
+                      </div>
+
+                      <div className="mt-3 text-center text-sm text-slate-400">
                         Khách hàng mới? <Link to="/dang-ky" onClick={() => setAccountOpen(false)} className="text-blue-600 no-underline font-semibold hover:underline">Tạo tài khoản</Link>
                       </div>
                     </div>
@@ -276,7 +305,7 @@ export default function Navbar() {
                             <button
                               key={sub.id}
                               onClick={() => { navigate(`/?category=${sub.slug}`); setMegaOpen(false); }}
-                              className="bg-transparent border-none text-left py-2 px-2.5 cursor-pointer rounded-lg text-sm text-gray-600 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center gap-1.5"
+                              className="bg-transparent border-none text-left py-2 px-2.5 cursor-pointer rounded-lg text-sm text-gray-600 hover:bg-accent-light hover:text-accent transition-colors flex items-center gap-1.5"
                             >
                               <ChevronRightIcon className="w-2 h-2 text-gray-300" />
                               {sub.name}
@@ -289,7 +318,7 @@ export default function Navbar() {
                       <div className="mt-4 pt-4 border-t border-gray-100">
                         <button
                           onClick={() => { navigate(`/?category=${parentCats[activeCategory].slug}`); setMegaOpen(false); }}
-                          className="bg-blue-600 hover:bg-blue-700 text-white border-none py-2 px-4 rounded-lg text-[13px] font-bold cursor-pointer transition-colors"
+                          className="bg-accent hover:bg-accent-dark text-white border-none py-2 px-4 rounded-lg text-[13px] font-bold cursor-pointer transition-colors"
                         >
                           Xem tất cả {parentCats[activeCategory].name} →
                         </button>
@@ -301,9 +330,9 @@ export default function Navbar() {
             )}
           </div>
 
-          <Link to="/?sale=true" className="no-underline text-slate-600 text-[15px] font-semibold py-3 px-4 hover:text-blue-600 transition-colors whitespace-nowrap">Khuyến mãi</Link>
-          <Link to="/tin-tuc" className="no-underline text-slate-600 text-[15px] font-semibold py-3 px-4 hover:text-blue-600 transition-colors whitespace-nowrap">Tin tức</Link>
-          <Link to="/ve-cua-hang" className="no-underline text-slate-600 text-[15px] font-semibold py-3 px-4 hover:text-blue-600 transition-colors whitespace-nowrap">Về cửa hàng</Link>
+          <Link to="/?sale=true" className="no-underline text-slate-600 text-[15px] font-semibold py-3 px-4 hover:text-accent transition-colors whitespace-nowrap">Khuyến mãi</Link>
+          <Link to="/tin-tuc" className="no-underline text-slate-600 text-[15px] font-semibold py-3 px-4 hover:text-accent transition-colors whitespace-nowrap">Tin tức</Link>
+          <Link to="/ve-cua-hang" className="no-underline text-slate-600 text-[15px] font-semibold py-3 px-4 hover:text-accent transition-colors whitespace-nowrap">Về cửa hàng</Link>
         </div>
       </div>
       {/* Mobile slide menu */}
@@ -339,7 +368,7 @@ export default function Navbar() {
                         <Link
                           to={`/?category=${cat.slug}`}
                           onClick={() => setMobileMenuOpen(false)}
-                          className="block py-2.5 px-3 text-sm font-semibold text-slate-700 no-underline hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors"
+                          className="block py-2.5 px-3 text-sm font-semibold text-slate-700 no-underline hover:bg-accent-light hover:text-accent rounded-lg transition-colors"
                         >
                           {cat.name}
                         </Link>
@@ -348,7 +377,7 @@ export default function Navbar() {
                             key={sub.id}
                             to={`/?category=${sub.slug}`}
                             onClick={() => setMobileMenuOpen(false)}
-                            className="block py-2 pl-7 pr-3 text-sm text-slate-500 no-underline hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors"
+                            className="block py-2 pl-7 pr-3 text-sm text-slate-500 no-underline hover:bg-accent-light hover:text-accent rounded-lg transition-colors"
                           >
                             {sub.name}
                           </Link>
@@ -364,15 +393,15 @@ export default function Navbar() {
               {/* Links */}
               <div className="px-4">
                 <Link to="/?sale=true" onClick={() => setMobileMenuOpen(false)}
-                  className="block py-3 px-2 text-[15px] font-semibold text-slate-700 no-underline hover:text-blue-600 transition-colors">
+                  className="block py-3 px-2 text-[15px] font-semibold text-slate-700 no-underline hover:text-accent transition-colors">
                   Khuyến mãi
                 </Link>
                 <Link to="/tin-tuc" onClick={() => setMobileMenuOpen(false)}
-                  className="block py-3 px-2 text-[15px] font-semibold text-slate-700 no-underline hover:text-blue-600 transition-colors">
+                  className="block py-3 px-2 text-[15px] font-semibold text-slate-700 no-underline hover:text-accent transition-colors">
                   Tin tức
                 </Link>
                 <Link to="/ve-cua-hang" onClick={() => setMobileMenuOpen(false)}
-                  className="block py-3 px-2 text-[15px] font-semibold text-slate-700 no-underline hover:text-blue-600 transition-colors">
+                  className="block py-3 px-2 text-[15px] font-semibold text-slate-700 no-underline hover:text-accent transition-colors">
                   Về cửa hàng
                 </Link>
               </div>
@@ -385,6 +414,66 @@ export default function Navbar() {
                 Hotline: {settings.phone1 || '0398.945.409'}
               </a>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Forgot password modal */}
+      {forgotOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => { setForgotOpen(false); setForgotSent(false); }} />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
+            <button
+              onClick={() => { setForgotOpen(false); setForgotSent(false); }}
+              className="absolute top-3 right-3 w-8 h-8 rounded-lg bg-slate-100 border-none cursor-pointer flex items-center justify-center hover:bg-slate-200 transition-colors"
+            >
+              <XMarkIcon className="w-4 h-4 text-slate-500" />
+            </button>
+
+            {forgotSent ? (
+              <div className="text-center py-4">
+                <div className="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center mx-auto mb-3">
+                  <svg className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+                </div>
+                <h3 className="text-base font-extrabold text-slate-900 mb-1">Đã gửi yêu cầu</h3>
+                <p className="text-sm text-slate-400 mb-4 leading-relaxed">
+                  Email đặt lại mật khẩu đã được gửi đến <strong className="text-slate-600">{forgotEmail}</strong>. Vui lòng kiểm tra hộp thư.
+                </p>
+                <button
+                  onClick={() => { setForgotOpen(false); setForgotSent(false); }}
+                  className="bg-slate-900 hover:bg-slate-800 text-white border-none rounded-lg py-2.5 px-6 text-sm font-bold cursor-pointer transition-colors"
+                >
+                  Đóng
+                </button>
+              </div>
+            ) : (
+              <>
+                <h3 className="text-base font-extrabold text-slate-900 mb-1 text-center">QUÊN MẬT KHẨU</h3>
+                <p className="text-sm text-slate-400 mb-5 text-center">Nhập email để nhận link đặt lại mật khẩu</p>
+
+                <form onSubmit={handleForgotPassword} className="flex flex-col gap-3">
+                  <input
+                    type="email"
+                    required
+                    value={forgotEmail}
+                    onChange={e => setForgotEmail(e.target.value)}
+                    placeholder="Nhập email của bạn"
+                    className="w-full border-[1.5px] border-slate-200 rounded-lg px-3.5 py-2.5 text-sm outline-none text-slate-900 focus:border-blue-600 transition-colors"
+                  />
+                  <button type="submit" disabled={forgotLoading}
+                    className="bg-slate-900 hover:bg-slate-800 text-white border-none rounded-lg py-2.5 text-sm font-bold cursor-pointer tracking-wide disabled:opacity-70 transition-colors"
+                  >
+                    {forgotLoading ? 'ĐANG GỬI...' : 'GỬI YÊU CẦU'}
+                  </button>
+                </form>
+
+                <div className="mt-4 text-center">
+                  <button onClick={() => setForgotOpen(false)} className="bg-transparent border-none text-sm text-slate-400 cursor-pointer hover:text-slate-600 transition-colors">
+                    ← Quay lại đăng nhập
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

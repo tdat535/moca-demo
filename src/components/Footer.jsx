@@ -2,7 +2,12 @@ import { Link } from 'react-router-dom';
 import { useAdmin } from '../context/AdminContext';
 import { TruckIcon, ShieldCheckIcon, CreditCardIcon, PhoneIcon } from '@heroicons/react/24/outline';
 
-const policies = ['Chính sách bảo mật', 'Chính sách đổi trả', 'Chính sách bảo hành', 'Hướng dẫn mua hàng', 'Phương thức thanh toán'];
+const policies = [
+  { label: 'Chính sách và quy định chung', to: '/chinh-sach-chung' },
+  { label: 'Chính sách bảo mật', to: '/chinh-sach-bao-mat' },
+  { label: 'Hướng dẫn mua hàng', to: '/huong-dan-mua-hang' },
+  { label: 'Hướng dẫn thanh toán', to: '/huong-dan-thanh-toan' },
+];
 
 const ICONS = {
   facebook: 'M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z',
@@ -32,7 +37,7 @@ export default function Footer() {
             { Icon: PhoneIcon, t: 'Tư Vấn 24/7', s: [s.phone1, s.phone2].filter(Boolean).join(' - ') || phone },
           ].map(({ Icon, t, s }) => (
             <div key={t} className="flex items-center gap-3 text-white">
-              <div className="w-10 h-10 bg-blue-600/25 rounded-xl flex items-center justify-center shrink-0">
+              <div className="w-10 h-10 bg-accent/25 rounded-xl flex items-center justify-center shrink-0">
                 <Icon className="w-5 h-5" />
               </div>
               <div>
@@ -59,10 +64,10 @@ export default function Footer() {
               <span className="text-white/20">|</span>
               <span className="flex items-center gap-1.5">
                 <PhoneIcon className="w-3.5 h-3.5 text-white/40 shrink-0" />
-                <a href={`tel:${phone.replace(/\D/g,'')}`} className="text-blue-400 font-extrabold no-underline hover:text-blue-300 transition-colors">{phone}</a>
+                <a href={`tel:${phone.replace(/\D/g,'')}`} className="text-accent font-extrabold no-underline hover:text-accent-dark transition-colors">{phone}</a>
                 {s.phone2 && <>
                   <span className="text-white/20">-</span>
-                  <a href={`tel:${s.phone2.replace(/\D/g,'')}`} className="text-blue-400 font-extrabold no-underline hover:text-blue-300 transition-colors">{s.phone2}</a>
+                  <a href={`tel:${s.phone2.replace(/\D/g,'')}`} className="text-accent font-extrabold no-underline hover:text-accent-dark transition-colors">{s.phone2}</a>
                 </>}
               </span>
               <span className="text-white/20">|</span>
@@ -84,8 +89,8 @@ export default function Footer() {
           <div>
             <h4 className="text-white font-bold text-sm uppercase tracking-wider mb-4">Chính sách</h4>
             <ul className="list-none flex flex-col gap-2.5">
-              {policies.map(t => (
-                <li key={t}><a href="#" className="text-white/50 no-underline text-sm hover:text-white transition-colors">{t}</a></li>
+              {policies.map(p => (
+                <li key={p.label}><Link to={p.to} className="text-white/50 no-underline text-sm hover:text-white transition-colors">{p.label}</Link></li>
               ))}
             </ul>
           </div>
@@ -94,13 +99,13 @@ export default function Footer() {
             <h4 className="text-white font-bold text-sm uppercase tracking-wider mb-4">Nhận ưu đãi</h4>
             <p className="text-sm mb-3 leading-relaxed">Đăng ký để nhận thông tin khuyến mãi mới nhất.</p>
             <div className="flex mb-4">
-              <input placeholder="Email của bạn" className="flex-1 bg-white/[.07] border border-white/[.12] text-white px-3 py-2.5 text-sm outline-none rounded-l-lg placeholder:text-white/30 focus:border-blue-500 transition-colors" />
-              <button className="bg-blue-600 hover:bg-blue-700 text-white border-none px-4 text-sm font-bold cursor-pointer rounded-r-lg transition-colors">Đăng ký</button>
+              <input placeholder="Email của bạn" className="flex-1 bg-white/[.07] border border-white/[.12] text-white px-3 py-2.5 text-sm outline-none rounded-l-lg placeholder:text-white/30 focus:border-accent transition-colors" />
+              <button className="bg-accent hover:bg-accent-dark text-white border-none px-4 text-sm font-bold cursor-pointer rounded-r-lg transition-colors">Đăng ký</button>
             </div>
             {socials.length > 0 && (
               <div className="flex gap-2">
                 {socials.map(sl => (
-                  <a key={sl.name} href={sl.href} target="_blank" rel="noopener noreferrer" className="bg-white/[.07] text-white/60 px-3 py-1.5 rounded-lg text-xs no-underline border border-white/[.08] hover:bg-blue-600/30 hover:text-white transition-all flex items-center gap-1.5">
+                  <a key={sl.name} href={sl.href} target="_blank" rel="noopener noreferrer" className="bg-white/[.07] text-white/60 px-3 py-1.5 rounded-lg text-xs no-underline border border-white/[.08] hover:bg-accent/30 hover:text-white transition-all flex items-center gap-1.5">
                     <svg className="w-3.5 h-3.5" viewBox="0 0 48 48" fill="currentColor"><path d={sl.icon} /></svg>
                     {sl.name}
                   </a>

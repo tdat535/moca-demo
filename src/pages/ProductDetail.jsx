@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAdmin } from '../context/AdminContext';
 import usePageTitle from '../hooks/usePageTitle';
+import SEO from '../components/SEO';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { useWishlist } from '../context/WishlistContext';
@@ -38,8 +39,11 @@ export default function ProductDetail() {
 
   useEffect(() => { if (product) addViewed(product.slug); }, [product?.slug]);
 
+  const productImage = product?.images?.[0] || null;
+
   if (!product) return (
     <div className="text-center py-24 px-5 bg-slate-100 min-h-screen">
+      <SEO title="Không tìm thấy sản phẩm" />
       <div className="text-6xl mb-4 opacity-40">
         <svg className="w-14 h-14 mx-auto text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M15.182 16.318A4.486 4.486 0 0 0 12.016 15a4.486 4.486 0 0 0-3.198 1.318M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM9.75 9.75c0 .414-.168.75-.375.75S9 10.164 9 9.75 9.168 9 9.375 9s.375.336.375.75Zm-.375 0h.008v.015h-.008V9.75Zm5.625 0c0 .414-.168.75-.375.75s-.375-.336-.375-.75.168-.75.375-.75.375.336.375.75Zm-.375 0h.008v.015h-.008V9.75Z"/></svg>
       </div>
@@ -63,6 +67,7 @@ export default function ProductDetail() {
 
   return (
     <div className="bg-slate-100 min-h-screen">
+      <SEO title={product.name} description={product.description || `${product.name} — MOCA Living`} ogImage={productImage} />
       <div className="max-w-[1200px] mx-auto px-4 py-5">
 
         {/* Breadcrumb */}
@@ -104,10 +109,19 @@ export default function ProductDetail() {
               <div className="flex gap-1.5 mb-3.5 flex-wrap">
                 {product.isNew && <span className="bg-emerald-50 text-emerald-600 text-xs font-bold px-2.5 py-1 rounded-full">MỚI</span>}
                 {discount > 0 && <span className="bg-blue-50 text-blue-600 text-xs font-bold px-2.5 py-1 rounded-full">GIẢM {discount}%</span>}
-                <span className="bg-green-50 text-green-600 text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1">
-                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
-                  Còn hàng
-                </span>
+                {product.stock > 0 ? (
+                  <span className={`text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1 ${
+                    product.stock <= 5 ? 'bg-orange-50 text-orange-600' : 'bg-green-50 text-green-600'
+                  }`}>
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
+                    {product.stock <= 5 ? 'Sắp hết' : 'Còn hàng'}
+                  </span>
+                ) : (
+                  <span className="bg-red-50 text-red-600 text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1">
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    Hết hàng
+                  </span>
+                )}
               </div>
 
               <h1 className="text-xl lg:text-2xl font-extrabold text-slate-900 mb-3.5 leading-snug">{product.name}</h1>
@@ -140,30 +154,36 @@ export default function ProductDetail() {
               )}
 
               {/* Qty */}
-              <div className="flex items-center gap-3.5 mb-5">
+              <div className="flex items-center gap-3.5 mb-2">
                 <span className="text-sm text-slate-500 font-semibold">Số lượng:</span>
                 <div className="inline-flex border-[1.5px] border-slate-200 rounded-lg overflow-hidden">
-                  <button onClick={() => setQty(q => Math.max(1, q - 1))}
-                    className="w-9 h-9 border-none bg-transparent cursor-pointer flex items-center justify-center text-slate-500 hover:bg-slate-100 transition-colors">
+                  <button onClick={() => setQty(q => Math.max(1, q - 1))} disabled={product.stock === 0}
+                    className="w-9 h-9 border-none bg-transparent cursor-pointer flex items-center justify-center text-slate-500 hover:bg-slate-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
                     <MinusIcon className="w-4 h-4" />
                   </button>
-                  <span className="w-11 flex items-center justify-center font-bold text-sm text-slate-900 border-x border-slate-200">{qty}</span>
-                  <button onClick={() => setQty(q => q + 1)}
-                    className="w-9 h-9 border-none bg-transparent cursor-pointer flex items-center justify-center text-slate-500 hover:bg-slate-100 transition-colors">
+                  <span className="w-11 flex items-center justify-center font-bold text-sm text-slate-900 border-x border-slate-200">{product.stock === 0 ? 0 : qty}</span>
+                  <button onClick={() => setQty(q => Math.min(q + 1, product.stock || 1))} disabled={product.stock === 0 || qty >= product.stock}
+                    className="w-9 h-9 border-none bg-transparent cursor-pointer flex items-center justify-center text-slate-500 hover:bg-slate-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
                     <PlusIcon className="w-4 h-4" />
                   </button>
                 </div>
               </div>
+              {product.stock > 0 && product.stock <= 5 && (
+                <p className="text-orange-600 text-xs font-semibold mb-4">Chỉ còn {product.stock} sản phẩm</p>
+              )}
 
               {/* Action buttons */}
               <div className="flex gap-3 mb-5">
-                <button onClick={doAdd} className={`flex-1 border-2 font-bold text-[15px] py-3.5 rounded-xl cursor-pointer transition-all ${
+                <button onClick={doAdd} disabled={product.stock === 0} className={`flex-1 border-2 font-bold text-[15px] py-3.5 rounded-xl cursor-pointer transition-all ${
+                  product.stock === 0 ? 'border-slate-200 text-slate-400 bg-slate-50 cursor-not-allowed' :
                   added ? 'border-emerald-500 text-emerald-600 bg-emerald-50' : 'border-blue-600 text-blue-600 bg-white hover:bg-blue-50'
                 }`}>
-                  {added ? '✓ Đã thêm vào giỏ!' : 'Thêm vào giỏ hàng'}
+                  {product.stock === 0 ? 'Hết hàng' : added ? '✓ Đã thêm vào giỏ!' : 'Thêm vào giỏ hàng'}
                 </button>
-                <button onClick={() => { doAdd(); navigate('/cart'); }}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white border-none font-bold text-[15px] py-3.5 rounded-xl cursor-pointer transition-colors shadow-lg">
+                <button onClick={() => { doAdd(); navigate('/cart'); }} disabled={product.stock === 0}
+                  className={`flex-1 border-none font-bold text-[15px] py-3.5 rounded-xl cursor-pointer transition-all shadow-lg ${
+                    product.stock === 0 ? 'bg-slate-300 text-white cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'
+                  }`}>
                   Mua ngay →
                 </button>
                 <button onClick={() => toggleWishlist(product.id)}
@@ -263,7 +283,7 @@ export default function ProductDetail() {
                 if (reviewForm.rating === 0) return;
                 setReviewSubmitting(true);
                 const name = reviewForm.name.trim() || profile?.full_name || 'Khách hàng';
-                await addReview({ product_id: product.id, customer_name: name, rating: reviewForm.rating, comment: reviewForm.comment.trim() });
+                await addReview({ product_id: product.id, customer_name: name, rating: reviewForm.rating, comment: reviewForm.comment.trim(), user_id: user?.id || null });
                 setReviewSubmitting(false);
                 setReviewSuccess(true);
                 setReviewForm({ rating: 0, name: '', comment: '' });
@@ -308,7 +328,7 @@ export default function ProductDetail() {
                 />
 
                 <button type="submit" disabled={reviewForm.rating === 0 || reviewSubmitting}
-                  className="bg-blue-600 hover:bg-blue-700 text-white border-none rounded-lg px-5 py-2 text-sm font-bold cursor-pointer disabled:opacity-50 transition-colors">
+                  className="bg-primary hover:bg-primary-dark text-white border-none rounded-lg px-5 py-2 text-sm font-bold cursor-pointer disabled:opacity-50 transition-colors">
                   {reviewSubmitting ? 'Đang gửi...' : 'Gửi đánh giá'}
                 </button>
               </form>

@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HelmetProvider } from 'react-helmet-async';
 import { CartProvider } from './context/CartContext';
 import { AdminProvider } from './context/AdminContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -7,6 +8,7 @@ import { WishlistProvider } from './context/WishlistContext';
 import { ToastProvider } from './context/ToastContext';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
+import ErrorBoundary from './components/ErrorBoundary';
 import ZaloButton from './components/ZaloButton';
 import PageLoader from './components/PageLoader';
 import PromoPopup from './components/PromoPopup';
@@ -23,6 +25,10 @@ const Profile = lazy(() => import('./pages/Profile'));
 const About = lazy(() => import('./pages/About'));
 const News = lazy(() => import('./pages/News'));
 const Wishlist = lazy(() => import('./pages/Wishlist'));
+const GeneralPolicy = lazy(() => import('./pages/GeneralPolicy'));
+const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
+const ShoppingGuide = lazy(() => import('./pages/ShoppingGuide'));
+const PaymentGuide = lazy(() => import('./pages/PaymentGuide'));
 
 function LazyFallback() {
   return (
@@ -56,6 +62,7 @@ function GuestOnly({ children }) {
 
 export default function App() {
   return (
+    <HelmetProvider>
     <BrowserRouter>
       <AuthProvider>
         <AdminProvider>
@@ -65,11 +72,12 @@ export default function App() {
             <ScrollToTop />
             <Suspense fallback={<LazyFallback />}>
             <Routes>
-              <Route path="/admin" element={<RequireAdmin><Admin /></RequireAdmin>} />
+              <Route path="/admin" element={<RequireAdmin><ErrorBoundary><Admin /></ErrorBoundary></RequireAdmin>} />
               <Route path="/dang-ky" element={<GuestOnly><Register /></GuestOnly>} />
               <Route
                 path="*"
                 element={
+                  <ErrorBoundary>
                   <div className="flex flex-col min-h-screen">
                     <PageLoader />
                     <Navbar />
@@ -83,6 +91,10 @@ export default function App() {
                         <Route path="/ve-cua-hang" element={<About />} />
                         <Route path="/tin-tuc" element={<News />} />
                         <Route path="/yeu-thich" element={<Wishlist />} />
+                        <Route path="/chinh-sach-chung" element={<GeneralPolicy />} />
+                        <Route path="/chinh-sach-bao-mat" element={<PrivacyPolicy />} />
+                        <Route path="/huong-dan-mua-hang" element={<ShoppingGuide />} />
+                        <Route path="/huong-dan-thanh-toan" element={<PaymentGuide />} />
                       </Routes>
                     </main>
                     <Footer />
@@ -90,6 +102,7 @@ export default function App() {
                     <BackToTop />
                     <PromoPopup />
                   </div>
+                  </ErrorBoundary>
                 }
               />
             </Routes>
@@ -100,5 +113,6 @@ export default function App() {
         </AdminProvider>
       </AuthProvider>
     </BrowserRouter>
+    </HelmetProvider>
   );
 }

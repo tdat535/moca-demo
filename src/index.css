@@ -1,6 +1,39 @@
 @import "tailwindcss";
 
+@theme {
+  --color-primary: #1e2d2d;
+  --color-primary-light: #edf0ee;
+  --color-primary-dark: #152121;
+  --color-accent: #c4753b;
+  --color-accent-light: #f5ede6;
+  --color-accent-dark: #a05f2e;
+  --color-surface: #f9f7f4;
+  --color-surface-alt: #f4f1ec;
+  --color-warm-border: #e8e3dc;
+  --color-warm-muted: #8a847e;
+  --color-warm-text: #2d2a24;
+
+  --color-blue-600: #1e2d2d;
+  --color-blue-50: #edf0ee;
+  --color-blue-700: #152121;
+  --color-blue-800: #0f1717;
+  --color-blue-500: #2a3d3d;
+  --color-blue-400: #c4753b;
+  --color-slate-100: #f9f7f4;
+  --color-slate-50: #f4f1ec;
+  --color-slate-800: #2d2a24;
+  --color-slate-900: #1a1816;
+  --color-slate-300: #c4bfb8;
+  --color-slate-400: #8a847e;
+  --color-gray-200: #e8e3dc;
+  --color-gray-900: #2d2a24;
+  --color-gray-700: #2d2a24;
+  --color-gray-500: #8a847e;
+  --color-gray-300: #c4bfb8;
+  --font-sans: 'Outfit', 'Inter', 'Segoe UI', Arial, sans-serif;
+}
+
 body {
-  font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { formatPrice } from '../data/products';
+import { useToast } from '../context/ToastContext';
 import usePageTitle from '../hooks/usePageTitle';
 import { CheckIcon, ChevronDownIcon } from '@heroicons/react/24/outline';
 
@@ -24,6 +25,7 @@ export default function Profile() {
     phone: profile?.phone || '',
     address: profile?.address || '',
   });
+  const { showToast } = useToast();
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState('');
 
@@ -42,7 +44,7 @@ export default function Profile() {
     setSaving(true);
     const { error } = await updateProfile(form);
     setSaving(false);
-    if (error) { console.error('Update profile error:', error); alert('Lỗi: ' + (error.message || JSON.stringify(error))); }
+    if (error) { console.error('Update profile error:', error); showToast('Lỗi: ' + (error.message || JSON.stringify(error)), 'error'); }
     else { setEditing(false); setToast('Cập nhật thành công!'); setTimeout(() => setToast(''), 2500); }
   };
 
