@@ -80,9 +80,14 @@ export default function Checkout() {
     if (data.expires_at && new Date(data.expires_at) < new Date()) { setCouponError('Mã giảm giá đã hết hạn'); return; }
     if (data.min_order && totalPrice < data.min_order) { setCouponError(`Đơn hàng tối thiểu ${formatPrice(data.min_order)}`); return; }
     if (data.max_uses && data.used_count >= data.max_uses) { setCouponError('Mã giảm giá đã hết lượt sử dụng'); return; }
-    if (data.max_uses_per_user && user) {
-      const { count } = await supabase.from('coupon_usage').select('*', { count: 'exact', head: true }).eq('coupon_id', data.id).eq('user_id', user.id);
-      if (count >= data.max_uses_per_user) { setCouponError('Bạn đã sử dụng mã này rồi'); return; }
+    if (data.max_uses_per_user) {
+      if (user) {
+        const { count } = await supabase.from('coupon_usage').select('*', { count: 'exact', head: true }).eq('coupon_id', data.id).eq('user_id', user.id);
+        if (count >= data.max_uses_per_user) { setCouponError('Bạn đã sử dụng mã này rồi'); return; }
+      } else if (form.phone) {
+        const { count } = await supabase.from('orders').select('*', { count: 'exact', head: true }).eq('customer_phone', form.phone).eq('coupon_code', code).not('coupon_code', 'is', null);
+        if (count >= data.max_uses_per_user) { setCouponError('Số điện thoại này đã sử dụng mã giảm giá này rồi'); return; }
+      }
     }
     setAppliedCoupon({ ...data });
     setCouponCode('');
@@ -184,21 +189,21 @@ export default function Checkout() {
               </div>
 
               <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 16, lineHeight: 1.6 }}>
-                Sau khi chuyển khoản, chúng tôi sẽ xác nhận đơn hàng trong vòng 5–15 phút.
+                Sau khi chuyển khoản, admin sẽ kiểm tra và xác nhận đơn hàng.
                 <br />Nếu cần hỗ trợ, liên hệ Zalo: <strong>{supportPhone}</strong>
               </p>
 
               <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'center' }}>
                 <button onClick={async () => {
                   setConfirming(true);
-                  await supabase.from('payment_transactions').update({ status: 'confirmed', confirmed_at: new Date().toISOString() }).eq('order_id', orderResult.id).eq('status', 'pending');
-                  setOrderResult(r => ({ ...r, payment: 'done' }));
+                  await supabase.from('payment_transactions').update({ confirmed_at: new Date().toISOString() }).eq('order_id', orderResult.id).eq('status', 'pending');
+                  setOrderResult(r => ({ ...r, payment: 'reported' }));
                   setConfirming(false);
                 }} disabled={confirming} style={{
-                  background: '#2563eb', color: '#fff', border: 'none', borderRadius: 10,
+                  background: confirming ? '#94a3b8' : '#2563eb', color: '#fff', border: 'none', borderRadius: 10,
                   padding: '12px 24px', fontSize: 14, fontWeight: 700, cursor: confirming ? 'wait' : 'pointer',
                   opacity: confirming ? .7 : 1,
-                }}>{confirming ? 'Đang xác nhận...' : 'Tôi đã chuyển khoản'}</button>
+                }}>{confirming ? 'Đang ghi nhận...' : 'Tôi đã chuyển khoản'}</button>
                 <a href={`https://zalo.me/${zaloPhone.replace(/\D/g,'')}`} target="_blank" rel="noopener noreferrer" style={{
                   border: '1.5px solid #e2e8f0', color: '#0068ff', textDecoration: 'none',
                   borderRadius: 10, padding: '12px 20px', fontSize: 14, fontWeight: 700,
@@ -213,22 +218,34 @@ export default function Checkout() {
 
   // ── Success page (COD or after bank confirm) ──
   if (orderResult) {
+    const isBankReported = orderResult.payment === 'reported';
     return (
       <div style={{ background: '#f1f5f9', minHeight: '100vh' }}>
         <div style={{ maxWidth: 560, margin: '0 auto', padding: '32px 16px' }}>
           <StepBar step={2} />
           <div style={{ textAlign: 'center', padding: '48px 28px', background: '#fff', borderRadius: 20, border: '1px solid #e2e8f0' }}>
-            <div style={{ width: 64, height: 64, background: '#ecfdf5', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            <div style={{ width: 64, height: 64, background: isBankReported ? '#fef3c7' : '#ecfdf5', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+              {isBankReported ? (
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#b45309" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 6v6l4 2"/><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/></svg>
+              ) : (
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              )}
             </div>
-            <h2 style={{ fontSize: 22, fontWeight: 800, color: '#0f172a', marginBottom: 8 }}>Đặt hàng thành công!</h2>
-            <p style={{ color: '#64748b', fontSize: 14, marginBottom: 6 }}>Cảm ơn bạn đã tin tưởng MOCA Living.</p>
+            <h2 style={{ fontSize: 22, fontWeight: 800, color: '#0f172a', marginBottom: 8 }}>
+              {isBankReported ? 'Đã ghi nhận chuyển khoản!' : 'Đặt hàng thành công!'}
+            </h2>
+            <p style={{ color: '#64748b', fontSize: 14, marginBottom: 6 }}>
+              {isBankReported ? 'Cảm ơn bạn, admin sẽ kiểm tra và xác nhận trong thời gian sớm nhất.' : 'Cảm ơn bạn đã tin tưởng MOCA Living.'}
+            </p>
             {orderResult.id && <p style={{ color: '#94a3b8', fontSize: 13, marginBottom: 20 }}>Mã đơn hàng: <strong style={{ color: '#2563eb' }}>#{orderResult.id}</strong></p>}
             <p style={{ color: '#64748b', fontSize: 14, marginBottom: 28, lineHeight: 1.7 }}>
-              Chúng tôi sẽ liên hệ xác nhận đơn hàng qua số điện thoại của bạn.
+              {isBankReported
+                ? 'Bạn có thể dùng mã đơn hàng để tra cứu tình trạng xác nhận thanh toán.'
+                : 'Chúng tôi sẽ liên hệ xác nhận đơn hàng qua số điện thoại của bạn.'}
             </p>
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
               <Link to="/" style={{ background: '#2563eb', color: '#fff', textDecoration: 'none', padding: '12px 24px', borderRadius: 10, fontWeight: 700, fontSize: 14 }}>Tiếp tục mua sắm</Link>
+              <Link to="/tra-cuu-don-hang" style={{ border: '1.5px solid #e2e8f0', color: '#0f172a', textDecoration: 'none', padding: '12px 24px', borderRadius: 10, fontWeight: 700, fontSize: 14 }}>Tra cứu đơn hàng</Link>
               {user && <Link to="/tai-khoan" style={{ border: '1.5px solid #e2e8f0', color: '#0f172a', textDecoration: 'none', padding: '12px 24px', borderRadius: 10, fontWeight: 700, fontSize: 14 }}>Xem đơn hàng</Link>}
             </div>
           </div>

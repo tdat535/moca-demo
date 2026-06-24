@@ -3,4 +3,4 @@ Allow: /
 Disallow: /admin
 Disallow: /tai-khoan
 
-Sitemap: https://noithatmoca.com/sitemap.xml
+Sitemap: https://www.noithatmoca.com/sitemap.xml

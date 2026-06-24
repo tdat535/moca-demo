@@ -102,7 +102,7 @@ export default function Navbar() {
         <div className="max-w-[1200px] mx-auto px-4 lg:px-6 py-3 flex items-center flex-wrap gap-3 lg:gap-8">
           {/* Logo */}
           <Link to="/" className="shrink-0">
-            <img src="/logoo2.png" alt="MOCA Living" className="h-10 lg:h-[60px] w-auto object-contain block" />
+            <img src="/logoo.jpg" alt="MOCA Living" className="h-10 lg:h-[60px] w-auto object-contain block" />
           </Link>
 
           {/* Search — desktop inline */}
@@ -333,6 +333,7 @@ export default function Navbar() {
           <Link to="/?sale=true" className="no-underline text-slate-600 text-[15px] font-semibold py-3 px-4 hover:text-accent transition-colors whitespace-nowrap">Khuyến mãi</Link>
           <Link to="/tin-tuc" className="no-underline text-slate-600 text-[15px] font-semibold py-3 px-4 hover:text-accent transition-colors whitespace-nowrap">Tin tức</Link>
           <Link to="/ve-cua-hang" className="no-underline text-slate-600 text-[15px] font-semibold py-3 px-4 hover:text-accent transition-colors whitespace-nowrap">Về cửa hàng</Link>
+          <Link to="/tra-cuu-don-hang" className="no-underline text-slate-600 text-[15px] font-semibold py-3 px-4 hover:text-accent transition-colors whitespace-nowrap">Tra cứu đơn hàng</Link>
         </div>
       </div>
       {/* Mobile slide menu */}
@@ -344,7 +345,7 @@ export default function Navbar() {
 
             <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
               <Link to="/" onClick={() => setMobileMenuOpen(false)}>
-                <img src="/logoo2.png" alt="MOCA Living" className="h-9 w-auto object-contain" />
+                <img src="/logoo.jpg" alt="MOCA Living" className="h-9 w-auto object-contain" />
               </Link>
               <button onClick={() => setMobileMenuOpen(false)} className="w-8 h-8 rounded-lg bg-slate-100 border-none cursor-pointer flex items-center justify-center">
                 <XMarkIcon className="w-5 h-5 text-slate-500" />
@@ -403,6 +404,10 @@ export default function Navbar() {
                 <Link to="/ve-cua-hang" onClick={() => setMobileMenuOpen(false)}
                   className="block py-3 px-2 text-[15px] font-semibold text-slate-700 no-underline hover:text-accent transition-colors">
                   Về cửa hàng
+                </Link>
+                <Link to="/tra-cuu-don-hang" onClick={() => setMobileMenuOpen(false)}
+                  className="block py-3 px-2 text-[15px] font-semibold text-slate-700 no-underline hover:text-accent transition-colors">
+                  Tra cứu đơn hàng
                 </Link>
               </div>
             </div>

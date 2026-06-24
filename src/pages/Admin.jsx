@@ -385,7 +385,7 @@ export default function Admin() {
       >
         <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${C.border}` }}>
           <Link to="/" className="flex items-center gap-2.5 no-underline">
-            <img src="/logoo2.png" alt="Logo" className="h-8 w-auto object-contain" />
+            <img src="/logoo.jpg" alt="Logo" className="h-8 w-auto object-contain" />
             <span className="text-[11px] font-semibold" style={{ color: C.light }}>Admin Dashboard</span>
           </Link>
           <button onClick={() => setSidebarOpen(false)}
@@ -1315,24 +1315,26 @@ export default function Admin() {
                             <td style={{ padding: '12px 16px', textAlign: 'center' }}>
                               <span style={{
                                 display: 'inline-block', padding: '2px 10px', borderRadius: 6, fontSize: 12, fontWeight: 600,
-                                background: p.status === 'confirmed' ? '#dcfce7' : p.status === 'failed' ? '#fee2e2' : p.status === 'refunded' ? '#fef3c7' : '#f1f5f9',
-                                color: p.status === 'confirmed' ? '#15803d' : p.status === 'failed' ? '#b91c1c' : p.status === 'refunded' ? '#b45309' : '#64748b',
+                                background: p.status === 'confirmed' ? '#dcfce7' : p.status === 'failed' ? '#fee2e2' : p.status === 'refunded' ? '#fef3c7' : p.confirmed_at ? '#fef3c7' : '#f1f5f9',
+                                color: p.status === 'confirmed' ? '#15803d' : p.status === 'failed' ? '#b91c1c' : p.status === 'refunded' ? '#b45309' : p.confirmed_at ? '#b45309' : '#64748b',
                               }}>
-                                {p.status === 'pending' ? 'Chờ thanh toán' : p.status === 'confirmed' ? 'Đã nhận' : p.status === 'failed' ? 'Thất bại' : 'Đã hoàn'}
+                                {p.status === 'confirmed' ? 'Đã nhận' : p.status === 'failed' ? 'Thất bại' : p.status === 'refunded' ? 'Đã hoàn' : p.confirmed_at ? 'Khách báo đã chuyển' : 'Chờ thanh toán'}
                               </span>
                             </td>
                             <td style={{ padding: '12px 16px', textAlign: 'center', color: C.light, fontSize: 12, whiteSpace: 'nowrap' }}>
                               {new Date(p.created_at).toLocaleDateString('vi-VN')}
                             </td>
                             <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                              {p.status === 'pending' ? (
+                              {p.status === 'pending' && p.confirmed_at ? (
                                 <button onClick={async () => {
                                   await supabase.from('payment_transactions').update({ status: 'confirmed', confirmed_at: new Date().toISOString() }).eq('id', p.id);
                                   showToast('Đã xác nhận thanh toán!');
                                   fetchAdminData();
-                                }} style={{ padding: '5px 12px', borderRadius: 6, border: 'none', background: C.primary, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                                }} style={{ padding: '5px 12px', borderRadius: 6, border: 'none', background: '#059669', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                                   Xác nhận
                                 </button>
+                              ) : p.status === 'pending' && !p.confirmed_at ? (
+                                <span style={{ fontSize: 12, color: C.light }}>Chưa báo</span>
                               ) : p.status === 'confirmed' && p.confirmed_at ? (
                                 <span style={{ fontSize: 12, color: C.light }}>
                                   {new Date(p.confirmed_at).toLocaleString('vi-VN')}

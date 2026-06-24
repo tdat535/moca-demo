@@ -11,7 +11,7 @@ import Footer from './components/Footer';
 import ErrorBoundary from './components/ErrorBoundary';
 import ZaloButton from './components/ZaloButton';
 import PageLoader from './components/PageLoader';
-import PromoPopup from './components/PromoPopup';
+
 import ScrollToTop from './components/ScrollToTop';
 import BackToTop from './components/BackToTop';
 import Home from './pages/Home';
@@ -29,6 +29,7 @@ const GeneralPolicy = lazy(() => import('./pages/GeneralPolicy'));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
 const ShoppingGuide = lazy(() => import('./pages/ShoppingGuide'));
 const PaymentGuide = lazy(() => import('./pages/PaymentGuide'));
+const OrderLookup = lazy(() => import('./pages/OrderLookup'));
 
 function LazyFallback() {
   return (
@@ -95,12 +96,12 @@ export default function App() {
                         <Route path="/chinh-sach-bao-mat" element={<PrivacyPolicy />} />
                         <Route path="/huong-dan-mua-hang" element={<ShoppingGuide />} />
                         <Route path="/huong-dan-thanh-toan" element={<PaymentGuide />} />
+                        <Route path="/tra-cuu-don-hang" element={<OrderLookup />} />
                       </Routes>
                     </main>
                     <Footer />
                     <ZaloButton />
                     <BackToTop />
-                    <PromoPopup />
                   </div>
                   </ErrorBoundary>
                 }

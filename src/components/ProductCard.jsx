@@ -50,9 +50,9 @@ export default function ProductCard({ product }) {
         </div>
         <button
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleWishlist(product.id); }}
-          className={`absolute top-2.5 right-2.5 w-8 h-8 rounded-full flex items-center justify-center border-none cursor-pointer transition-all ${
-            wished ? 'bg-red-50' : 'bg-white/80 opacity-0 group-hover:opacity-100'
-          }`}
+           className={`absolute top-2.5 right-2.5 w-8 h-8 rounded-full flex items-center justify-center border-none cursor-pointer transition-all ${
+             wished ? 'bg-red-50' : 'bg-white/80 opacity-0 group-hover:opacity-100'
+           }`}
         >
           {wished
             ? <HeartSolidIcon className="w-4.5 h-4.5 text-red-500" />

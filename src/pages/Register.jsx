@@ -28,7 +28,7 @@ export default function Register() {
       <div className="w-full max-w-[480px] bg-white rounded-2xl overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.08)]">
         {/* Header */}
         <div className="bg-slate-900 px-8 py-7 text-center">
-          <Link to="/"><img src="/logoo2.png" alt="Logo" className="h-12 brightness-[10] mb-3" /></Link>
+          <Link to="/"><img src="/logoo.jpg" alt="Logo" className="h-12 brightness-[10] mb-3" /></Link>
           <h1 className="text-xl font-extrabold text-white m-0">TẠO TÀI KHOẢN MỚI</h1>
           <p className="text-[13px] text-white/50 mt-1">Đăng ký để mua sắm dễ dàng hơn</p>
         </div>

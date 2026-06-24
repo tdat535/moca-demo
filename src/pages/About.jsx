@@ -16,7 +16,7 @@ export default function About() {
 
         {/* Hero */}
         <div style={{ background: 'linear-gradient(135deg, #0f172a, #1e293b)', borderRadius: 20, padding: '48px 40px', marginBottom: 24, color: '#fff', textAlign: 'center' }}>
-          <img src="/logoo2.png" alt="Logo" style={{ height: 56, marginBottom: 16 }} />
+          <img src="/logoo.jpg" alt="Logo" style={{ height: 56, marginBottom: 16 }} />
           <h1 style={{ fontSize: 28, fontWeight: 900, marginBottom: 8 }}>MOCA Living</h1>
           <p style={{ fontSize: 16, color: 'rgba(255,255,255,.6)', maxWidth: 520, margin: '0 auto', lineHeight: 1.7 }}>
             Nội thất hiện đại, chất lượng cao — mang đến không gian sống tinh tế cho mọi gia đình Việt.
