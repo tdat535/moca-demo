@@ -469,54 +469,35 @@ create trigger trg_notify_new_order
   for each row execute function notify_admin_new_order();
 
 
--- ── 13. STOCK & SOLD TRIGGERS (tự trừ tồn kho, cộng đã bán) ──
+-- ── 13. STOCK & SOLD TRIGGERS (chỉ xử lý khi giao hàng / hủy) ──
 
--- Khi đặt hàng: trừ stock
-create or replace function decrease_stock_on_order()
+-- Xoá trigger cũ: không còn trừ stock khi đặt hàng nữa
+drop trigger if exists trg_decrease_stock on orders;
+drop function if exists decrease_stock_on_order();
+
+create or replace function handle_order_status_stock()
 returns trigger as $$
 declare
   item jsonb;
 begin
   for item in select * from jsonb_array_elements(new.items)
   loop
-    update products
-    set stock = greatest(stock - (item->>'qty')::int, 0)
-    where id = (item->>'product_id')::bigint;
+    -- Chuyển sang 'delivered': trừ stock + cộng sold
+    if new.status = 'delivered' and old.status != 'delivered' then
+      update products
+      set stock = greatest(stock - (item->>'qty')::int, 0),
+          sold = sold + (item->>'qty')::int
+      where id = (item->>'product_id')::bigint;
+    end if;
+
+    -- Chuyển từ 'delivered' sang 'cancelled': hoàn stock + giảm sold
+    if new.status = 'cancelled' and old.status = 'delivered' then
+      update products
+      set stock = stock + (item->>'qty')::int,
+          sold = greatest(sold - (item->>'qty')::int, 0)
+      where id = (item->>'product_id')::bigint;
+    end if;
   end loop;
-  return new;
-end;
-$$ language plpgsql security definer;
-
-drop trigger if exists trg_decrease_stock on orders;
-create trigger trg_decrease_stock
-  after insert on orders
-  for each row execute function decrease_stock_on_order();
-
--- Khi đơn chuyển sang 'delivered': cộng sold
--- Khi đơn bị 'cancelled': hoàn stock
-create or replace function handle_order_status_stock()
-returns trigger as $$
-declare
-  item jsonb;
-begin
-  if new.status = 'delivered' and old.status != 'delivered' then
-    for item in select * from jsonb_array_elements(new.items)
-    loop
-      update products
-      set sold = sold + (item->>'qty')::int
-      where id = (item->>'product_id')::bigint;
-    end loop;
-  end if;
-
-  if new.status = 'cancelled' and old.status != 'cancelled' then
-    for item in select * from jsonb_array_elements(new.items)
-    loop
-      update products
-      set stock = stock + (item->>'qty')::int
-      where id = (item->>'product_id')::bigint;
-    end loop;
-  end if;
-
   return new;
 end;
 $$ language plpgsql security definer;
